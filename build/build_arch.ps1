@@ -64,14 +64,20 @@ Run-Checked $vp @('-m', 'unittest', 'discover', '-s', 'tests', '-v')
 $dist = Join-Path (Get-Location) "builds\$Arch"
 $work = Join-Path (Get-Location) "builds\work-$Arch"
 $spec = Join-Path (Get-Location) "builds\spec-$Arch"
+$projectRoot = (Get-Location).Path
+$assetDir = Join-Path $projectRoot 'assets'
+$configFile = Join-Path $projectRoot 'config.json'
+$iconFile = Join-Path $assetDir 'ne501.ico'
+$versionFile = Join-Path $projectRoot 'version_info.txt'
+$entryFile = Join-Path $projectRoot 'main.py'
 New-Item -ItemType Directory -Force -Path $dist, $work, $spec | Out-Null
 Run-Checked $vp @(
     '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--windowed',
-    '--name', 'NE501_Multi_Pump_Controller', '--icon', 'assets\ne501.ico',
-    '--add-data', 'assets;assets', '--add-data', 'config.json;.',
+    '--name', 'NE501_Multi_Pump_Controller', '--icon', $iconFile,
+    '--add-data', "$assetDir;assets", '--add-data', "$configFile;.",
     '--hidden-import', 'serial.tools.list_ports_windows',
-    '--version-file', 'version_info.txt',
-    '--distpath', $dist, '--workpath', $work, '--specpath', $spec, 'main.py'
+    '--version-file', $versionFile,
+    '--distpath', $dist, '--workpath', $work, '--specpath', $spec, $entryFile
 )
 
 $exe = Join-Path $dist 'NE501_Multi_Pump_Controller\NE501_Multi_Pump_Controller.exe'
