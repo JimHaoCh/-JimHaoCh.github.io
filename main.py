@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import sys
+import json
+import sysconfig
+import time
+import traceback
+from pathlib import Path
+
+from PySide6.QtCore import QSettings, QTimer
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication
+
+from ne501.config import load_config, resource_path
+from ui.main_window import MainWindow
+from ui.style import build_stylesheet
+from ne501.mock_controller import MockNE501Controller
+
+
+def main() -> int:
+    # The packaged build uses this mode to check GUI startup and simulation
+    # without opening a serial port or touching any physical pump.
+    report_path = None
+    if "--smoke-test-report" in sys.argv:
+        index = sys.argv.index("--smoke-test-report")
+        if index + 1 >= len(sys.argv):
+            return 2
+        report_path = Path(sys.argv[index + 1])
+    if report_path is not None:
+        try:
+            return run_smoke_test(report_path)
+        except Exception:
+            report_path.write_text(json.dumps({"ok": False, "error": traceback.format_exc()}, indent=2), encoding="utf-8")
+            return 1
+
+    app = QApplication(sys.argv)
+    app.setApplicationName("NE501 Multi Pump Controller")
+    app.setOrganizationName("NE501Controller")
+    app.setStyle("Fusion")
+
+    settings = QSettings("NE501Controller", "NE501 Multi Pump Controller")
+    try:
+        ui_scale = float(settings.value("ui_scale", 1.0))
+    except (TypeError, ValueError):
+        ui_scale = 1.0
+    app.setStyleSheet(build_stylesheet(ui_scale))
+
+    icon_path = resource_path("assets/ne501.ico")
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+
+    window = MainWindow(load_config())
+    window.show()
+    return app.exec()
+
+
+def run_smoke_test(report_path: Path) -> int:
+    import serial
+    from serial.tools import list_ports
+
+    app = QApplication([sys.argv[0]])
+    app.setApplicationName("NE501 Multi Pump Controller")
+    app.setOrganizationName("NE501Controller")
+    config = load_config()
+    window = MainWindow(config)
+    # The smoke test must not change the real user's saved COM selection.
+    window.settings = QSettings(str(report_path.parent / "settings.ini"), QSettings.Format.IniFormat)
+    window.show()
+    if sorted(window.panels) != [0, 1, 2, 3]:
+        raise RuntimeError("Expected four default pump panels")
+    if window.port_combo.findData("MOCK") < 0:
+        raise RuntimeError("Simulation mode is missing")
+    mock = MockNE501Controller([0, 1, 2, 3], latency=0)
+    mock.connect("MOCK", 19200)
+    if sorted(mock.scan([0, 1, 2, 3])) != [0, 1, 2, 3]:
+        raise RuntimeError("Simulation scan did not find all four pumps")
+    mock.disconnect()
+    # Ensure the dynamically-selected Windows COM backend is bundled.
+    list(list_ports.comports())
+
+    def wait_until(predicate, description: str) -> None:
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+            app.processEvents()
+            if predicate():
+                return
+            time.sleep(0.01)
+        raise RuntimeError(f"Timed out waiting for {description}")
+
+    # Exercise real Qt queued signals and workers using simulation only.
+    window.port_combo.setCurrentIndex(window.port_combo.findData("MOCK"))
+    window.connect_controller()
+    wait_until(
+        lambda: isinstance(window.controller, MockNE501Controller)
+        and all(panel.online for panel in window.panels.values())
+        and window.pending_tasks == 0,
+        "simulation connection and scan",
+    )
+    window.emergency_stop()
+    wait_until(lambda: window.pending_tasks == 0, "simulated STOP ALL")
+    if not all("STOP confirmed" in panel.last_response_label.text() for panel in window.panels.values()):
+        raise RuntimeError("Simulated STOP ALL did not confirm every pump")
+    window.controller.disconnect()
+    window.controller = None
+    QTimer.singleShot(300, app.quit)
+    exit_code = app.exec()
+    if exit_code:
+        raise RuntimeError(f"GUI returned {exit_code}")
+    report_path.write_text(json.dumps({
+        "ok": True,
+        "python_platform": sysconfig.get_platform(),
+        "pyserial": serial.__version__,
+        "simulation_pumps": 4,
+        "hardware_connected": False,
+    }, indent=2), encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

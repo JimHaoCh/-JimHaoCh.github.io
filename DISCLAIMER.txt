@@ -1,0 +1,28 @@
+NE-501 Multi Pump Controller v1.0.1 — 使用說明與免責聲明
+
+本軟體供研究與教學使用，屬獨立開發的第三方工具。New Era、NE-501
+及其他品牌名稱屬各權利人所有；本專案未宣稱經原廠授權、認證或背書。
+
+本軟體目前未提供醫療器材核准或臨床驗證資料，請勿用於人體輸注、
+臨床治療或其他需要經核准醫療設備的用途。操作人員應依原廠手冊及機構
+規範，自行確認設備、線路、流量、針筒內徑、液體及微流體系統相容性。
+
+本程式依賴電腦、Windows、虛擬機、USB 轉接器、線材及泵浦的正常
+通訊。軟體停止指令無法取代獨立實體緊急停止或斷電措施；通訊中斷、
+電腦休眠或程式異常時，應直接檢查泵浦狀態。Prime 速度選項不測量或
+限制流體壓力。操作前請先用 Simulation 測試，再完成實機與系統驗證。
+
+本程式按現況提供，不保證適用於特定用途或所有硬體配置。在適用法律
+允許範圍內，使用者應自行評估與承擔使用風險。實際硬體驗證範圍請
+參考專案中的 VERIFICATION.txt；v1.0.1 安裝版尚待實體四泵系統測試。
+
+Independent research/educational software; not affiliated with or endorsed by
+New Era Pump Systems. No medical-device approval or clinical validation is
+provided; do not use for clinical treatment or human infusion. Software
+STOP requires the computer and serial link and cannot replace an independent
+physical emergency stop or power disconnect. Prime presets do not measure or
+limit pressure. The software is provided AS IS, without warranty, to the extent
+permitted by applicable law. Validate the complete setup before operation.
+
+References, acknowledgements, and third-party notices: see REFERENCES.md and
+THIRD_PARTY_NOTICES.md in the installed documentation folder.

@@ -1,0 +1,18 @@
+NE-501 Multi Pump Controller v1.0.1 — 快速操作
+
+此說明適用於已成功編譯並完成安裝的版本。USB 轉 RS-232 驅動需另外安裝。
+
+1. 開啟程式，先選擇 Simulation mode 練習，不會連接實際幫浦。
+2. 實際操作時，關閉 WinPumpTerm 等其他占用 COM 埠的程式。
+3. 選擇裝置管理員顯示的 COM 埠，按 Connect 與 Scan Pumps。
+4. 確認各幫浦位址。依序驗證注射筒內徑、設定 Prime 和穩定流速、
+   按 APPLY & VERIFY，確認設定後再 RUN。
+5. EMERGENCY STOP ALL 會依序向各泵浦送出軟體停止指令。若顯示
+   STOP NOT CONFIRMED，請直接檢查該幫浦；已進行的通訊會先完成。
+
+Parallels：把 USB 轉 RS-232 裝置連至 Windows 虛擬機。避免 Mac 或
+Windows 休眠。通訊中斷時應直接確認幫浦狀態，並備有獨立斷電方法。
+
+設定及記錄位於 %LOCALAPPDATA%\NE501_Multi_Pump_Controller\。
+解除安裝會保留該資料夾。原 V1.0.0 說明書中的介面功能仍可參考；
+如文件與本說明有差異，請以本版實際畫面與本說明為準。

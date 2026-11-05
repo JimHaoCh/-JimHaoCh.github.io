@@ -1,0 +1,6 @@
+{
+  "port": "COM4",
+  "baudrate": 19200,
+  "addresses": [0, 1, 2, 3],
+  "window_title": "NE-501 Multi Pump Controller v1.0.1"
+}

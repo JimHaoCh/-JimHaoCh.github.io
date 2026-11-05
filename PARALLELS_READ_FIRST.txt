@@ -1,0 +1,18 @@
+M5 Mac / Parallels — 本次啟動問題
+
+原本的啟動腳本在 \\Mac\ 共用資料夾可能顯示 UNC 路徑錯誤；此版改為
+以 pushd 處理共用路徑。Windows 的 CMD 視啟動方式可能先顯示 UNC
+提示。為便於建置與管理，建議仍將專案複製至 Windows 本機。
+
+Windows 必須有 Python 3.12 ARM64；Mac 上安裝的 Python 不會自動變成
+Windows 的 Python。安裝檔：
+https://www.python.org/ftp/python/3.12.10/python-3.12.10-arm64.exe
+
+開啟 Windows 檔案總管，在地址列輸入 %LOCALAPPDATA%，建立 NE501
+資料夾，再將新版完整壓縮包的內容解壓縮至其中。安裝 Python 時
+勾選 Add python.exe to PATH，完成後重新啟動 Windows。打開該 Windows
+本機資料夾，雙擊 BUILD_THIS_WINDOWS.bat。
+
+腳本會嘗試尋找正確架構的 Python，找不到時顯示安裝提示。此壓縮包
+仍是原始碼與建置工具，不包含已編譯的 EXE。腳本修正尚未在 Windows
+或 Parallels 實機測試。

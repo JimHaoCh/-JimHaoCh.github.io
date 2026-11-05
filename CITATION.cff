@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: Please cite this software when it contributes to your research.
+title: NE-501 Multi Pump Controller
+type: software
+version: 1.0.1
+authors:
+  - name: NE-501 Multi Pump Controller contributors
+repository-code: https://github.com/JimHaoCh/-JimHaoCh.github.io/tree/ne501-v1.0.1
+abstract: Independent research and education controller for a four-pump NE-501 RS-232 network.

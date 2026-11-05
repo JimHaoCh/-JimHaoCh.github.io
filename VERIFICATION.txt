@@ -1,0 +1,22 @@
+NE-501 v1.0.1 candidate — verification record (2026-11-05)
+
+The build launcher was revised after a reported Parallels UNC-path and missing
+Python error. The revised Windows scripts have not been executed on Windows.
+
+Completed in the development environment (Linux x86-64, Python 3.12):
+- 34/34 unittest cases passed. These include simulation, protocol, settings,
+  per-address STOP reporting, queued-command invalidation and dispatch logic
+  tested with Qt stand-ins.
+- Python syntax compilation passed.
+- controller.py, protocol.py and mock_controller.py match the v1.0.0 source.
+- Windows build workflow YAML parsed and its dependency order was inspected.
+
+Not yet completed:
+- PySide6 GUI startup with real Qt.
+- Windows x64 and Windows ARM64 EXE or installer compilation.
+- Windows installation, architecture selection and uninstall.
+- Prolific USB/COM communication and any real-pump testing.
+- Code signing or public-distribution licensing review.
+
+Do not describe a generated installer as verified until the Windows tests have
+actually run. The pump control interface requires separate real-device testing.

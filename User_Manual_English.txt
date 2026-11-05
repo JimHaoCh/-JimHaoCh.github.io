@@ -1,0 +1,439 @@
+                                                                             NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+
+
+
+     NE-501 Multi Pump Controller v1.0.0
+                                 English Operation Manual
+                   For multi-pump New Era NE-501 OEM syringe-pump control over RS-232
+
+
+
+
+  Figure 1. NE501 Multi Pump Controller v1.0.0 connected to the four-pump system. Pump 00 shows a verified diameter and verified
+                                                        pumping program.
+
+Recommended reading order First-time installers should complete Pre_Installation_Setup_Guide_English before
+using this operation manual.
+
+
+
+
+                        Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+                                                                             NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+
+1. Purpose of the Software
+NE501 Multi Pump Controller is a Windows application for controlling multiple New Era NE-501 OEM syringe pumps.
+The default configuration is a four-pump network: Pump 00, Pump 01, Pump 02, and Pump 03.
+
+Each pump has an independent panel with controls for:
+
+ Syringe inside diameter
+ Prime enable/disable
+ Five Prime speed presets
+ Prime volume
+ Steady flow rate
+ Infuse / Withdraw direction
+ Continuous steady flow or a finite Steady target volume
+ Active selection for group actions
+ Individual RUN / STOP
+The application also provides Apply Active, RUN Active, STOP Active, EMERGENCY STOP ALL, command/response
+logging, CSV logs, Simulation mode, and adjustable UI size.
+
+
+2. Important Safety Information
+2.1 EMERGENCY STOP ALL limitations
+EMERGENCY STOP ALL sends stop commands to all configured pump addresses. It is a software stop function that
+still depends on Windows, the USB-RS232 adapter, communication cables, and pump power. Keep a practical
+method of cutting pump power available at the bench.
+
+2.2 Prime speed is not a pressure limit
+Max / High / Medium / Low / Min are software speed presets derived from the NE-501 plunger-speed capability. They
+control commanded plunger speed and flow rate. This software does not contain a pressure sensor and cannot
+determine actual microfluidic pressure.
+
+Pressure depends on tubing diameter and length, microchannel resistance, fittings and valves, air bubbles, blockage,
+liquid viscosity, and chip geometry. For a new chip or tubing setup, start Prime at Min (5%) or Low (10%).
+
+2.3 The syringe inside diameter must be correct
+The NE-501 converts flow based on the syringe inside diameter. An incorrect diameter directly causes a flow-rate
+error. Use the inside diameter in millimeters supplied by the syringe manufacturer; do not infer it only from nominal
+syringe volume.
+
+
+3. Hardware and Pump Network
+Windows PC
+  | USB
+USB-to-RS232 adapter
+  |
+CBL-PC-PUMP
+  |
+Pump 00 - Computer / To Computer
+  | Network
+Pump 01 - Computer / To Computer
+  | Network
+Pump 02 - Computer / To Computer
+  | Network
+Pump 03 - Computer / To Computer
+
+                        Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+                                                                              NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+
+
+Each pump must have a unique network address. The default project configuration uses 00, 01, 02, and 03.
+
+Baud rate: 19200
+Data bits: 8
+Parity: None
+Stop bits: 1
+Flow control: None
+
+
+Close WinPumpTerm and any other serial software before connecting with NE501 Multi Pump Controller.
+
+
+4. Starting the Application
+Development version:
+
+run_dev.bat
+
+
+Final EXE:
+
+NE501_Multi_Pump_Controller.exe
+
+
+The top bar contains Port, 19200 baud / 8N1, Refresh COM, Connect, Scan Pumps, UI size, and connection status.
+
+
+5. Connecting to the Pumps
+Step 1 - Select the COM port
+Click Refresh COM and select the COM port for the USB-RS232 adapter. The tested system commonly uses COM4,
+but Windows may assign a different number. Use Device Manager as the source of truth.
+
+Step 2 - Connect
+Click Connect. A successful connection is shown by the green Connected indicator in the upper-right corner.
+
+Step 3 - Scan Pumps
+Click Scan Pumps 00, 01, 02, 03. Each healthy panel should show Online and an NE501 firmware version.
+
+
+6. Required Workflow for Each Pump
+1) SET & VERIFY DIAMETER
+-> 2) Configure Prime / Steady Flow
+-> 3) APPLY & VERIFY
+-> 4) Select Active Pumps / RUN
+
+
+Follow the sequence above. Controls remain intentionally locked until prerequisite steps are complete.
+
+
+7. Step 1 - Set the Syringe Inside Diameter
+Enter the actual inside diameter, for example 10.00 mm, then click SET & VERIFY DIAMETER. The software writes
+DIA to the pump, reads DIA back, and compares the returned value with the input.
+
+Success is shown as STEP 1 COMPLETE and Verified: <diameter> mm. Prime, steady-flow settings, Active, and
+APPLY then become available.
+
+If you edit the diameter after verification, the application clears the verified state, invalidates the applied program,
+clears Active, and requires diameter verification again.
+
+                         Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+                                                                             NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+
+8. Prime Function
+Prime quickly advances fluid into the tubing or microfluidic chip, then automatically transitions to the steady-flow
+phase after the requested Prime volume is delivered. Enable Prime before steady flow to use it.
+
+8.1 Five Prime speed presets
+                                             Fraction of maximum plunger
+ Option                                                                                       Suggested use
+                                             speed
+
+                                                                                              Low-resistance, large-channel
+ Max                                         100%                                             systems already confirmed to tolerate
+                                                                                              the flow
+
+ High                                        50%                                              Faster filling
+
+ Medium                                      25%                                              Moderate Prime
+
+                                                                                              Recommended starting point for many
+ Low                                         10%
+                                                                                              microfluidic systems; software default
+
+                                                                                              Initial testing for higher-resistance or
+ Min                                         5%
+                                                                                              more fragile chips
+
+These five levels are software presets. The application calculates the Prime flow rate from the verified syringe inside
+diameter.
+
+Approximate values for a 10.00 mm inside-diameter syringe are:
+
+ Prime level                                                          Approximate Prime rate
+
+ Max                                                                  240 mL/hr
+
+ High                                                                 120 mL/hr
+
+ Medium                                                               60 mL/hr
+
+ Low                                                                  24 mL/hr
+
+ Min                                                                  12 mL/hr
+
+The GUI displays Calculated Prime rate in mL/hr and µL/min. The actual rate accepted by the pump may be adjusted
+slightly downward to comply with the NE-501 numeric format and firmware rate limits. After APPLY & VERIFY
+succeeds, Last response reports the accepted program information.
+
+8.2 Prime volume
+Enter the volume used for the fast-fill phase and choose µL or mL, for example Prime volume = 100 µL.
+
+8.3 Automatic transition
+When the Prime volume is complete, the pump automatically advances to the steady-flow phase. You do not press
+RUN again.
+
+
+
+
+                        Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+                                                                            NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+
+9. Steady Flow Settings
+9.1 Steady rate
+Supported units are µL/min, mL/min, µL/hr, and mL/hr. If a value cannot be represented directly in the NE-501
+numeric format, the application may convert it to an equivalent unit before writing it to the pump.
+
+9.2 Direction
+Choose Infuse or Withdraw. Prime and steady flow use the same direction setting.
+
+9.3 Continuous steady flow
+Enable Continuous steady flow to run the steady phase until STOP is pressed.
+
+9.4 Steady target volume
+Clear Continuous steady flow to enable a finite Steady target volume. This value applies only to the steady-flow
+phase. For example, Prime volume = 100 µL and Steady target volume = 1 mL produces approximately 100 µL of
+Prime followed by 1 mL of steady-flow delivery. The program enters STOP after the steady target is complete.
+
+
+10. APPLY & VERIFY
+After configuring the pump, click APPLY & VERIFY. The application writes the NE-501 pumping program and reads
+key values back. It verifies program phase, function, Prime rate, Prime volume, steady rate, steady volume, direction,
+and the STOP phase when finite-volume operation is used.
+
+RUN is enabled only after verification succeeds. A successful panel shows Program verified in Last response.
+
+When a command is rejected, the GUI reports the command and the pump error. Common codes include ?OOR =
+Value out of range, ?NA = Command not applicable, and ?COM = Invalid command.
+
+
+11. Active Selection
+Active (include in group actions) determines which pumps respond to the group buttons. It does not change the
+behavior of the individual RUN and STOP buttons.
+
+Example: if Pump 00 and Pump 02 are Active while Pump 01 and Pump 03 are inactive, RUN Active starts only Pump
+00 and Pump 02.
+
+
+12. RUN
+RUN becomes available after SET & VERIFY DIAMETER and APPLY & VERIFY are complete. The software starts
+the pump from Pumping Program Phase 1.
+
+If Prime is enabled:
+RUN -> Prime phase -> Prime volume complete -> Steady flow -> Continuous operation or finite
+target -> STOP
+
+If Prime is disabled:
+RUN -> Steady flow
+
+
+
+13. STOP
+The red STOP button in each pump panel stops only that pump. The software first checks the pump state, then
+handles the NE-501 stopped/paused behavior so that an idle STP ?NA response is not treated as a true fault.
+
+                       Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+                                                                            NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+
+14. Group Actions
+Select All Available
+Sets every Online pump with a verified diameter to Active.
+
+Clear Active
+Clears Active on all pumps.
+
+Apply Active
+Runs APPLY & VERIFY for each Active pump using that pump panel's independent parameters.
+
+RUN Active
+Starts every Active pump whose program has been verified.
+
+STOP Active
+Stops every Active pump.
+
+EMERGENCY STOP ALL
+Runs the stop sequence for all configured addresses regardless of Active state. The default addresses are 00, 01, 02,
+and 03.
+
+
+15. UI Size
+Use UI size to compensate for different Windows display scaling. Available presets are 85%, 100%, 115%, and 130%.
+The setting is remembered. Pump panels are inside a scrollable region so controls are not compressed when the
+window is smaller than the full four-panel layout.
+
+
+16. Command / Response Log
+The bottom area shows serial communication, for example:
+
+TX 00 VER | RX Stopped | NE501V3.934
+TX 00 DIA 10.00 | RX Stopped
+TX 00 RAT ... | RX Stopped
+
+
+For troubleshooting, preserve the pump address, TX command, RX response, and any error code.
+
+
+17. CSV Log Location
+Windows default:
+
+%LOCALAPPDATA%\NE501_Multi_Pump_Controller\logs\
+
+
+A new CSV file is created each time the application starts. Fields include timestamp, address, command, status, data,
+error, alarm, and raw_hex. The file can be opened in Excel.
+
+
+18. Troubleshooting
+18.1 COM port cannot connect
+   The USB-RS232 adapter is connected.
+
+
+                       Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+                                                                             NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+   Device Manager shows the Prolific USB Serial COM Port.
+   The correct COM number is selected.
+   WinPumpTerm is fully closed.
+   Other serial monitors are closed.
+
+18.2 Pump shows Offline
+   The pump is powered.
+   The network cable direction is correct.
+   Every pump address is unique.
+   Baud rate is 19200.
+   Upstream pumps are powered because the communication chain passes through them.
+
+18.3 Diameter cannot be verified
+   The pump is stopped.
+   The diameter is within 0.10 - 50.00 mm.
+   The pump returns a valid DIA response.
+
+18.4 APPLY reports ?OOR
+?OOR means the pump rejected a value as out of range. Common causes are a steady rate outside the usable range
+for the syringe diameter, a volume value the firmware cannot represent, or a Prime rate close to a firmware limit.
+Prime includes automatic downward fallback; adjust the user steady-flow value if needed.
+
+18.5 ?NA
+?NA means the command is not applicable in the current pump state. The current STOP flow includes state handling
+for the NE501 V3.934 idle STP ?NA behavior.
+
+18.6 Prime is too fast
+Reduce the Prime preset in this order: Max -> High -> Medium -> Low -> Min. Start new microfluidic systems at Min or
+Low.
+
+
+19. Simulation Mode
+The Port list includes Simulation mode (no hardware). It allows you to test the GUI, diameter workflow, Prime settings,
+Active selection, and RUN / STOP without writing to a physical COM port.
+
+
+20. Disconnecting or Closing the Application
+When Disconnect or application close is requested, the GUI can ask whether to send STOP to all pumps first. For
+normal operation, choose Yes, confirm that pump motion has stopped, and then remove pump power or fluid
+connections.
+
+
+21. Building the Final EXE
+21.1 Create the Python environment
+Install Python 3.12 64-bit, then run setup_dev.bat.
+
+21.2 Run tests
+run_tests.bat
+
+
+All tests should pass before a release build.
+
+
+
+                        Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+                                                                             NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
+
+
+21.3 Build the release
+build_final_release.bat
+
+
+The release folder is created under release\NE501_Multi_Pump_Controller_v1.0.0\. A target PC does not need
+Python, but it still needs the Windows driver for the USB-RS232 adapter.
+
+
+22. config.json
+The final EXE first looks for config.json in the same folder as the executable. Default content:
+
+{
+    "port": "COM4",
+    "baudrate": 19200,
+    "addresses": [0, 1, 2, 3],
+    "window_title": "NE-501 Multi Pump Controller v1.0.0"
+}
+
+
+Pump addresses must be unique and between 0 and 99. Restart the application after editing config.json.
+
+
+23. Recommended Daily Operating SOP
+1. Power on all four pumps
+2. Confirm RS-232 / Network wiring
+3. Start the application
+4. Connect
+5. Scan Pumps
+6. SET & VERIFY DIAMETER for each pump
+7. Configure Prime / Steady flow
+8. APPLY & VERIFY
+9. Select the required Active pumps
+10. RUN / RUN Active
+11. At experiment end, STOP / STOP Active
+12. Confirm all pump motion has stopped
+13. Disconnect
+14. Turn off pump power
+
+
+
+24. Version Information
+Software: NE-501 Multi Pump Controller
+Version: 1.0.0
+Target pump: New Era NE-501 OEM
+Default network: 00, 01, 02, 03
+Default baud: 19200 / 8N1
+GUI language: English
+Manual language: English
+
+
+Technical references: New Era Pump Systems NE-500/NE-501 Multi-Phaser User Manual, NE-1000/NE-500/NE-501
+Rates and Specifications, and the SyringePump.com download/driver page.
+
+This controller was developed for the current four-pump NE-501 experimental system. A formal experimental SOP
+should also define tubing, microfluidic chip limits, maximum allowable pressure, fluid compatibility, and physical
+power-disconnect procedures.
+
+
+
+
+                        Operation manual | New Era NE-501 OEM | Default network 00, 01, 02, 03 | 19200 baud / 8N1
+
