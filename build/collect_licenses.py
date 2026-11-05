@@ -36,7 +36,7 @@ def main(destination: str) -> None:
         target = dest / "Python" / "LICENSE.txt"
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(python_license, target)
-    for name in ("LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt"):
+    for name in ("LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt", "pyserial-BSD-3-Clause.txt"):
         source = Path("third_party_license_texts") / name
         if source.is_file():
             shutil.copy2(source, dest / name)

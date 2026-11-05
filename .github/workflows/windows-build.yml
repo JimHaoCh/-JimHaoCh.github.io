@@ -125,3 +125,10 @@ jobs:
           $tag = 'ne501-v1.0.1-build-${{ github.run_number }}'
           gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Multi Pump Controller v1.0.1 (Pre-release)' --notes-file RELEASE_NOTES.md 'release/NE501_Multi_Pump_Setup_v1.0.1.exe' 'release/SHA256.txt' 'DISCLAIMER.txt' 'REFERENCES.md'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed. The verified artifact remains available in this Actions run.' }
+          # Withdraw the first passing candidate, which omitted the full pySerial BSD notice.
+          $oldTags = @(gh release list --limit 100 --json tagName --jq '.[].tagName')
+          if ($LASTEXITCODE -ne 0) { throw 'Could not check the earlier candidate release.' }
+          if ($oldTags -contains 'ne501-v1.0.1-build-2') {
+            gh release delete 'ne501-v1.0.1-build-2' --yes --cleanup-tag
+            if ($LASTEXITCODE -ne 0) { throw 'New release published; earlier candidate could not be withdrawn.' }
+          }
