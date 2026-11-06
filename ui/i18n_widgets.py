@@ -149,7 +149,11 @@ class MessageBox:
             button=dialog.button(flag)
             if button: button.setText(tr('OK' if name=='Ok' else name))
         dialog.exec()
-        return dialog.standardButton(dialog.clickedButton())
+        clicked=dialog.clickedButton()
+        if clicked is not None:return dialog.standardButton(clicked)
+        for flag in (W.QMessageBox.StandardButton.Cancel,W.QMessageBox.StandardButton.No,W.QMessageBox.StandardButton.Close,W.QMessageBox.StandardButton.Ok):
+            if buttons & flag:return flag
+        return W.QMessageBox.StandardButton.NoButton
     @staticmethod
     def question(parent,title,text,buttons=None,default=None):
         buttons=buttons if buttons is not None else W.QMessageBox.StandardButton.Yes|W.QMessageBox.StandardButton.No
