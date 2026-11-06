@@ -97,7 +97,7 @@ class UserConfigTests(unittest.TestCase):
     def test_invalid_existing_user_file_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            user = root / "user" / "NE501_Multi_Pump_Controller" / "config.json"
+            user = root / "user" / "NE501_Timeline_UI_Preview" / "config.json"
             user.parent.mkdir(parents=True)
             user.write_text("invalid JSON")
             legacy = root / "legacy.json"

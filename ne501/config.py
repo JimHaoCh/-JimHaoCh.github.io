@@ -11,7 +11,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "port": "COM4",
     "baudrate": 19200,
     "addresses": [0, 1, 2, 3],
-    "window_title": "NE-501 Multi Pump Controller v1.0.1",
+    "window_title": "NE-501 Timeline UI Preview",
 }
 
 VALID_BAUDRATES = {300, 1200, 2400, 9600, 19200}
@@ -33,7 +33,7 @@ def external_config_path() -> Path:
 def user_config_path() -> Path:
     """A writable location shared by installs and preserved across upgrades."""
     root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / ".local" / "share"))
-    return root / "NE501_Multi_Pump_Controller" / "config.json"
+    return root / "NE501_Timeline_UI_Preview" / "config.json"
 
 
 def _validated_config(candidate: dict[str, Any]) -> dict[str, Any]:

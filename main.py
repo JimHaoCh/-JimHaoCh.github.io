@@ -38,7 +38,7 @@ def main() -> int:
     app.setOrganizationName("NE501Controller")
     app.setStyle("Fusion")
 
-    settings = QSettings("NE501Controller", "NE501 Multi Pump Controller")
+    settings = QSettings("NE501Controller", "NE501 Timeline UI Preview")
     try:
         ui_scale = float(settings.value("ui_scale", 1.0))
     except (TypeError, ValueError):
@@ -68,6 +68,17 @@ def run_smoke_test(report_path: Path) -> int:
     window.show()
     if sorted(window.panels) != [0, 1, 2, 3]:
         raise RuntimeError("Expected four default pump panels")
+    if window.timeline_editor is None or len(window.timeline_editor.model.addresses) != 4:
+        raise RuntimeError("Four-track timeline preview is missing")
+    timeline = window.timeline_editor
+    timeline.canvas.grab()
+    timeline.check_flow()
+    if not timeline.play_button.isEnabled():
+        raise RuntimeError("Timeline simulation check failed")
+    timeline.start_preview()
+    if not timeline.running:
+        raise RuntimeError("Timeline simulation did not start")
+    timeline.stop_preview()
     if window.port_combo.findData("MOCK") < 0:
         raise RuntimeError("Simulation mode is missing")
     mock = MockNE501Controller([0, 1, 2, 3], latency=0)
@@ -111,6 +122,7 @@ def run_smoke_test(report_path: Path) -> int:
         "python_platform": sysconfig.get_platform(),
         "pyserial": serial.__version__,
         "simulation_pumps": 4,
+        "timeline_preview": True,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")
     return 0

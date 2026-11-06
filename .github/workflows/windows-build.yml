@@ -57,7 +57,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: NE501-installer-candidate
-          path: release/NE501_Multi_Pump_Setup_v1.0.1.exe
+          path: release/NE501_Timeline_UI_Preview_Setup.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -80,7 +80,7 @@ jobs:
           path: release
       - name: Test installer and installed application
         shell: pwsh
-        run: ./build/test_installer.ps1 -Arch '${{ matrix.arch }}' -Installer 'release/NE501_Multi_Pump_Setup_v1.0.1.exe'
+        run: ./build/test_installer.ps1 -Arch '${{ matrix.arch }}' -Installer 'release/NE501_Timeline_UI_Preview_Setup.exe'
 
   verified-artifact:
     needs: install-test
@@ -93,21 +93,21 @@ jobs:
       - name: Create SHA-256 checksum
         shell: pwsh
         run: |
-          $f = 'release/NE501_Multi_Pump_Setup_v1.0.1.exe'
+          $f = 'release/NE501_Timeline_UI_Preview_Setup.exe'
           $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$h  NE501_Multi_Pump_Setup_v1.0.1.exe" | Set-Content -Encoding ascii 'release/SHA256.txt'
+          "$h  NE501_Timeline_UI_Preview_Setup.exe" | Set-Content -Encoding ascii 'release/SHA256.txt'
       - uses: actions/upload-artifact@v4
         with:
           name: NE501-installer-verified
           path: |
-            release/NE501_Multi_Pump_Setup_v1.0.1.exe
+            release/NE501_Timeline_UI_Preview_Setup.exe
             release/SHA256.txt
           if-no-files-found: error
           retention-days: 30
 
   publish-prerelease:
     needs: verified-artifact
-    if: github.event_name == 'push' && github.ref == 'refs/heads/ne501-v1.0.1'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/ne501-timeline-ui-preview-20261106'
     runs-on: windows-2022
     permissions:
       contents: write
@@ -122,13 +122,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'ne501-v1.0.1-build-${{ github.run_number }}'
-          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Multi Pump Controller v1.0.1 (Pre-release)' --notes-file RELEASE_NOTES.md 'release/NE501_Multi_Pump_Setup_v1.0.1.exe' 'release/SHA256.txt' 'DISCLAIMER.txt' 'REFERENCES.md'
+          $tag = 'ne501-timeline-ui-preview-${{ github.run_number }}'
+          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview (Simulation Only)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_Timeline_UI_Preview_Setup.exe' 'release/SHA256.txt' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed. The verified artifact remains available in this Actions run.' }
-          # Withdraw the first passing candidate, which omitted the full pySerial BSD notice.
-          $oldTags = @(gh release list --limit 100 --json tagName --jq '.[].tagName')
-          if ($LASTEXITCODE -ne 0) { throw 'Could not check the earlier candidate release.' }
-          if ($oldTags -contains 'ne501-v1.0.1-build-2') {
-            gh release delete 'ne501-v1.0.1-build-2' --yes --cleanup-tag
-            if ($LASTEXITCODE -ne 0) { throw 'New release published; earlier candidate could not be withdrawn.' }
-          }

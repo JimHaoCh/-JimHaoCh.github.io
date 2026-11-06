@@ -397,7 +397,7 @@ class PumpPanel(QGroupBox):
         self.active_checkbox.setEnabled(diameter_ready and not self.busy)
         self.apply_button.setEnabled(can_configure_flow)
         self.run_button.setEnabled(
-            diameter_ready and self.settings_applied and not self.busy
+            diameter_ready and self.settings_applied and not self.busy and not self.running
         )
         # STOP stays available whenever the pump is online.
         self.stop_button.setEnabled(self.online)

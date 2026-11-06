@@ -1,19 +1,19 @@
-#define MyAppName "NE-501 Multi Pump Controller"
-#define MyAppVersion "1.0.1"
+#define MyAppName "NE-501 Timeline UI Preview"
+#define MyAppVersion "1.1.0"
 #define MyAppExeName "NE501_Multi_Pump_Controller.exe"
 
 [Setup]
-AppId={{4D6C2834-6DF7-4921-A9C4-CBA47318A501}
+AppId={{4D6C2834-6DF7-4921-A9C4-CBA47318A511}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-DefaultDirName={localappdata}\Programs\NE501_Multi_Pump_Controller
+DefaultDirName={localappdata}\Programs\NE501_Timeline_UI_Preview
 DefaultGroupName={#MyAppName}
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64os or arm64
 ArchitecturesInstallIn64BitMode=x64os or arm64
 MinVersion=10.0.17763
 OutputDir=..\release
-OutputBaseFilename=NE501_Multi_Pump_Setup_v1.0.1
+OutputBaseFilename=NE501_Timeline_UI_Preview_Setup
 SetupIconFile=..\assets\ne501.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
@@ -30,6 +30,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 [Files]
 Source: "..\builds\arm64\NE501_Multi_Pump_Controller\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: PreferArm64Files
 Source: "..\builds\x64\NE501_Multi_Pump_Controller\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: PreferX64Files
+Source: "..\TIMELINE_PREVIEW_README_zh.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\QUICK_START_Traditional_Chinese.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\User_Manual_Traditional_Chinese.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\User_Manual_English.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
@@ -66,3 +67,4 @@ begin
     Result := False;
   end;
 end;
+

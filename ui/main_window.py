@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self.thread_pool = QThreadPool.globalInstance()
         self.thread_pool.setMaxThreadCount(1)
         self.csv_logger = CsvCommandLogger()
-        self.settings = QSettings("NE501Controller", "NE501 Multi Pump Controller")
+        self.settings = QSettings("NE501Controller", "NE501 Timeline UI Preview")
         self.pending_tasks = 0
         self.task_gate = TaskGate()
         self._panel_pending: dict[int, int] = {}
@@ -143,7 +143,6 @@ class MainWindow(QMainWindow):
         group_bar.addWidget(self.apply_active_button)
         group_bar.addWidget(self.run_active_button)
         group_bar.addWidget(self.stop_active_button)
-        group_bar.addWidget(self.emergency_button)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
@@ -161,11 +160,35 @@ class MainWindow(QMainWindow):
         splitter.addWidget(lower_widget)
         splitter.setSizes([600, 240])
 
+        # Keep the original manual controls intact and add an isolated timeline
+        # preview. The preview has no reference to the serial controller.
+        from PySide6.QtWidgets import QTabWidget
+        from .timeline_editor import TimelineEditor
+        manual_page = QWidget()
+        manual_layout = QVBoxLayout(manual_page)
+        manual_layout.setContentsMargins(0, 0, 0, 0)
+        manual_layout.addWidget(self.workflow_banner)
+        manual_layout.addWidget(splitter, 1)
+        self.mode_tabs = QTabWidget()
+        self.mode_tabs.addTab(manual_page, "手動控制 / Manual")
+        self.timeline_editor = None
+        if len(self.addresses) == 4:
+            self.timeline_editor = TimelineEditor(self.addresses)
+            self.mode_tabs.addTab(self.timeline_editor, "流程編輯 / Timeline")
+            self.mode_tabs.currentChanged.connect(self._mode_changed)
+            self.mode_tabs.setCurrentIndex(1)
+        else:
+            notice = QLabel("時間軌預覽需要設定四台幫浦位址。手動控制仍可使用。")
+            notice.setWordWrap(True)
+            self.mode_tabs.addTab(notice, "流程編輯 / Timeline")
+        safety_row = QHBoxLayout()
+        safety_row.addStretch()
+        safety_row.addWidget(self.emergency_button)
         central = QWidget()
         layout = QVBoxLayout(central)
         layout.addLayout(top_bar)
-        layout.addWidget(self.workflow_banner)
-        layout.addWidget(splitter, 1)
+        layout.addLayout(safety_row)
+        layout.addWidget(self.mode_tabs, 1)
         self.setCentralWidget(central)
 
         self.refresh_button.clicked.connect(self.refresh_ports)
@@ -184,6 +207,10 @@ class MainWindow(QMainWindow):
         self.refresh_ports()
         self.append_log(f"Log file: {self.csv_logger.path}")
         self.append_log("Close WinPumpTerm before connecting to the COM port.")
+
+    def _mode_changed(self, index: int) -> None:
+        if self.timeline_editor is not None and index != 1 and self.timeline_editor.busy():
+            self.timeline_editor.stop_preview()
 
     def apply_ui_scale(self) -> None:
         scale = float(self.ui_scale_combo.currentData() or 1.0)
@@ -673,8 +700,8 @@ class MainWindow(QMainWindow):
         if panel.confirmed_diameter is None:
             QMessageBox.warning(self, panel.title(), "Set and verify the syringe inside diameter first.")
             return False
-        if panel.running and not require_applied:
-            QMessageBox.warning(self, panel.title(), "The pump is running. Press STOP before changing settings.")
+        if panel.running:
+            QMessageBox.warning(self, panel.title(), "The pump is running. Press STOP before changing settings or starting again.")
             return False
         if require_applied and not panel.settings_applied:
             QMessageBox.warning(self, panel.title(), "Settings are not applied. Click APPLY & VERIFY first.")

@@ -38,7 +38,7 @@ try {
     if ($proc.ExitCode -ne 0 -or -not (Test-Path $report)) { throw 'Installed application smoke test failed.' }
     $smoke = Get-Content -Raw $report | ConvertFrom-Json
     if (-not $smoke.ok -or $smoke.python_platform -ne $expectedPlatform) { throw 'Wrong installed application architecture.' }
-    $config = Join-Path $userData 'NE501_Multi_Pump_Controller\config.json'
+    $config = Join-Path $userData 'NE501_Timeline_UI_Preview\config.json'
     if (-not (Test-Path $config)) { throw 'User config was not created.' }
     $uninstaller = Join-Path $target 'unins000.exe'
     if (-not (Test-Path $uninstaller)) { throw 'Uninstaller is missing.' }
