@@ -38,7 +38,7 @@ class BilingualManualTests(unittest.TestCase):
         self.win.close();manager.set_language('zh_TW');self.temp.cleanup()
     def ready_mock(self):
         self.win.controller=MockNE501Controller([0,1,2,3],latency=0);self.win.controller.connect('MOCK',19200)
-        self.win.connection_label.setText('● Connected MOCK');self.win.connect_button.setText('Disconnect')
+        self.win.connection_label.setText('● Connected MOCK');self.win.connection_label.setObjectName('onlineStatus');self.win.connection_label.style().unpolish(self.win.connection_label);self.win.connection_label.style().polish(self.win.connection_label);self.win.connect_button.setText('Disconnect')
         self.win._set_group_buttons_enabled(True)
         for panel in self.win.panels.values():panel.set_online(True);panel.update_from_status('S')
     def wait_idle(self):
@@ -139,6 +139,14 @@ class BilingualManualTests(unittest.TestCase):
                                 point=panel.stop_button.mapTo(viewport,QPoint(0,0))
                                 if not viewport.rect().contains(point) or point.y()+panel.stop_button.height()>viewport.height():
                                     problems.append((filename.name,'stop',address,point.toTuple(),viewport.size().toTuple(),panel.size().toTuple()))
+                        if index==0:
+                            viewport=self.win.editor_scroll.viewport()
+                            panel=self.win.panels[self.win.selected_address]
+                            for field in (panel.diameter_input,panel.set_diameter_button,panel.rate_unit_combo,panel.direction_combo,panel.mode_combo):
+                                point=field.mapTo(viewport,QPoint(0,0))
+                                if point.x()<0 or point.x()+field.width()>viewport.width():problems.append((filename.name,'inspector width',point.toTuple(),field.size().toTuple(),viewport.size().toTuple()))
+                            point=panel.apply_button.mapTo(self.win,QPoint(0,0))
+                            if point.y()+panel.apply_button.height()>self.win.height():problems.append((filename.name,'apply footer',point.toTuple()))
         self.assertFalse(problems,problems)
 
     def test_group_apply_reports_successes_when_one_pump_fails(self):
@@ -180,3 +188,50 @@ class BilingualManualTests(unittest.TestCase):
                 self.assertEqual(other.panels[address].index,index)
                 self.assertEqual(other.panels[address].address,address)
         finally:other.close()
+
+    def test_alarm_invalidates_setup_and_keeps_stop_available(self):
+        self.ready_mock();panel=self.win.panels[0]
+        panel.confirm_diameter(10);panel.mark_settings_applied()
+        panel.update_from_status('A')
+        self.assertFalse(panel.settings_applied);self.assertIsNone(panel.confirmed_diameter)
+        self.assertFalse(panel.run_button.isEnabled());self.assertTrue(panel.stop_button.isEnabled())
+        self.assertFalse(panel.set_diameter_button.isEnabled())
+        panel.update_from_status('S')
+        self.assertTrue(panel.set_diameter_button.isEnabled());self.assertFalse(panel.run_button.isEnabled())
+    def test_unknown_motion_status_never_enables_start(self):
+        self.ready_mock();panel=self.win.panels[0]
+        panel.confirm_diameter(10);panel.mark_settings_applied()
+        panel.update_from_status(None)
+        self.assertFalse(panel.settings_applied);self.assertFalse(panel.run_button.isEnabled())
+        self.assertTrue(panel.stop_button.isEnabled())
+
+    def test_language_preference_is_restored_by_a_new_window(self):
+        self.win.language_combo.setCurrentIndex(self.win.language_combo.findData('en'))
+        self.settings.sync()
+        second=MainWindow({'addresses':[0,1,2,3]},settings=self.settings)
+        try:
+            self.assertEqual(second.language_combo.currentData(),'en')
+            self.assertEqual(second.mode_tabs.tabText(0),'Manual Control')
+        finally:second.close()
+
+    def test_auto_refresh_waits_while_a_modal_dialog_is_open(self):
+        self.ready_mock();self.win.mode_tabs.setCurrentIndex(0);self.win.auto_refresh_checkbox.setChecked(True)
+        with patch('ui.main_window.QApplication.activeModalWidget',return_value=object()),patch.object(self.win,'refresh_status') as refresh:
+            self.win.maybe_refresh_status();refresh.assert_not_called()
+    def test_group_apply_checks_stop_between_pumps(self):
+        self.ready_mock()
+        for panel in self.win.panels.values():panel.confirm_diameter(10);panel.set_active(True)
+        original=self.win.controller.configure_program
+        attempted=[];tickets=[]
+        def configure(address,settings):
+            attempted.append(address)
+            result=original(address,settings)
+            tickets.append(self.win.task_gate.begin_stop())
+            return result
+        try:
+            with patch.object(self.win.controller,'configure_program',side_effect=configure):
+                self.win.apply_active();self.wait_idle()
+            self.assertEqual(attempted,[0])
+        finally:
+            for ticket in tickets:
+                if ticket is not None:self.win.task_gate.end_stop(ticket)

@@ -114,20 +114,23 @@ class TimelineCanvas(QWidget):
         desired = max(1, self.visible_ticks * 76 / self.track_width())
         spacing = 10 ** math.floor(math.log10(desired))
         spacing = next(m * spacing for m in (1, 2, 5, 10) if m * spacing >= desired)
+        p.setFont(QFont(self.font().family(),9))
+        end_reserved = self.tick_to_x(self.model.total)-p.fontMetrics().horizontalAdvance(format_time(self.model.total))-6 if self.view_start+self.visible_ticks==self.model.total else float('inf')
         tick = math.ceil(self.view_start / spacing) * spacing
-        p.setFont(QFont(self.font().family(), 9))
         while tick <= self.view_start + self.visible_ticks:
             x = self.tick_to_x(tick)
             p.setPen(QColor('#3c4552'))
             p.drawLine(round(x), self.TOP, round(x), self.height())
             p.setPen(QColor('#b6c2d2'))
-            p.drawText(QRectF(x + 3, 10, 105, 22), Qt.AlignmentFlag.AlignLeft, format_time(tick))
+            if x+3+p.fontMetrics().horizontalAdvance(format_time(tick)) < end_reserved-3:
+                p.drawText(QRectF(x + 3, 10, 105, 22), Qt.AlignmentFlag.AlignLeft, format_time(tick))
             tick += spacing
         if self.view_start + self.visible_ticks == self.model.total:
             end_x = self.tick_to_x(self.model.total)
-            p.fillRect(QRectF(end_x - 80, 6, 80, 26), QColor('#20252c'))
+            end_width=p.fontMetrics().horizontalAdvance(format_time(self.model.total))+6
+            p.fillRect(QRectF(end_x-end_width,6,end_width,26),QColor('#20252c'))
             p.setPen(QColor('#b6c2d2'))
-            p.drawText(QRectF(end_x - 80, 10, 77, 22), Qt.AlignmentFlag.AlignRight, format_time(self.model.total))
+            p.drawText(QRectF(end_x-end_width,10,end_width-3,22),Qt.AlignmentFlag.AlignRight,format_time(self.model.total))
         clips = list(self.model.clips)
         if self.drag and self.drag.get('candidate'):
             candidate = self.drag['candidate']
@@ -158,8 +161,11 @@ class TimelineCanvas(QWidget):
                 p.setPen(QColor('white'))
                 f = QFont(self.font()); f.setPointSize(9); f.setBold(True); p.setFont(f)
                 direction = '→ 推注' if clip.direction == 'INF' else '← 抽取'
-                p.drawText(QRectF(text_x, r.top() + 3, r.right() - text_x - 3, 22),
-                           Qt.AlignmentFlag.AlignLeft, f'{direction}  {clip.rate:g} {clip.unit}')
+                available=max(0,round(min(r.right(),self.width()-self.RIGHT)-text_x-3))
+                title=tr(f'{direction}  {clip.rate:g} {clip.unit}')
+                if p.fontMetrics().horizontalAdvance(title)>available:title=f'{"→" if clip.direction=="INF" else "←"} {clip.rate:g} {clip.unit}'
+                title=p.fontMetrics().elidedText(title,Qt.TextElideMode.ElideRight,available)
+                p.drawText(QRectF(text_x,r.top()+3,available,22),Qt.AlignmentFlag.AlignLeft,title)
                 if r.height() > 40:
                     f.setPointSize(8); f.setBold(False); p.setFont(f)
                     p.drawText(QRectF(text_x, r.top() + 26, r.right() - text_x - 3, 20),
@@ -182,7 +188,8 @@ class TimelineCanvas(QWidget):
         p.drawLine(x, self.TOP - 7, x, self.height())
         p.restore()
         p.fillRect(QRectF(0, 0, self.LEFT, self.TOP), QColor('#20252c'))
-        p.setPen(QColor('#adb9c9')); p.setFont(self.font()); p.drawText(10, 26, '幫浦 / 位址')
+        p.setPen(QColor('#adb9c9')); header_font=QFont(self.font());header_font.setPointSize(9);p.setFont(header_font)
+        p.drawText(QRectF(8,7,self.LEFT-16,28),Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter,'幫浦 / 位址')
         p.save()
         p.setClipRect(QRectF(0, self.TOP, self.LEFT - 3, self.height()-self.TOP))
         for pump in range(4):

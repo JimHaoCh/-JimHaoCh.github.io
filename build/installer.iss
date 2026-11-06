@@ -28,6 +28,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
+Source: "..\BILINGUAL_UI_QUICK_START_en.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\BILINGUAL_MANUAL_UI_v1.2.0.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\UI_REVIEW_2026-11-06.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\fonts\OFL.txt"; DestDir: "{app}\docs\NotoSansCJK"; Flags: ignoreversion

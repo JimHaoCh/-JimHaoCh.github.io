@@ -85,7 +85,7 @@ class PumpPanel(GroupBox):
         self.diameter_input=QDoubleSpinBox();self.diameter_input.setRange(.1,50);self.diameter_input.setDecimals(2)
         self.diameter_input.setSingleStep(.01);self.diameter_input.setValue(10);self.diameter_input.setSuffix(' mm')
         self.set_diameter_button=QPushButton('Set and verify');self.set_diameter_button.setObjectName('diameterButton')
-        row=QHBoxLayout();row.addWidget(self.diameter_input,1);row.addWidget(self.set_diameter_button);detail.addLayout(row)
+        detail.addWidget(self.diameter_input);detail.addWidget(self.set_diameter_button)
         self.diameter_status=QLabel('Diameter not verified');self.diameter_status.setObjectName('warningLabel');self.diameter_status.setWordWrap(True)
         detail.addWidget(self.diameter_status)
         detail.addWidget(QLabel('2  Delivery settings'))
@@ -97,7 +97,7 @@ class PumpPanel(GroupBox):
         self.direction_combo=QComboBox();self.direction_combo.addItem('Infuse','INF');self.direction_combo.addItem('Withdraw','WDR')
         self.mode_combo=QComboBox();self.mode_combo.addItem('Continuous',True);self.mode_combo.addItem('Target volume',False)
         self.continuous_checkbox=QCheckBox('Continuous');self.continuous_checkbox.setChecked(True);self.continuous_checkbox.hide()
-        form=QFormLayout();form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form=QFormLayout();form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow);form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         for label,field in [('Rate',rate),('Direction',self.direction_combo),('Mode',self.mode_combo)]:form.addRow(QLabel(label),field)
         detail.addLayout(form)
         self.volume_input=QDoubleSpinBox();self.volume_input.setRange(.001,9999);self.volume_input.setDecimals(3);self.volume_input.setValue(1)
@@ -117,11 +117,12 @@ class PumpPanel(GroupBox):
         self.prime_volume_input=QDoubleSpinBox();self.prime_volume_input.setRange(.001,9999);self.prime_volume_input.setDecimals(3);self.prime_volume_input.setValue(100)
         self.prime_volume_unit_combo=QComboBox()
         for label,code in VOLUME_UNITS:self.prime_volume_unit_combo.addItem(label,code)
-        row=QHBoxLayout();row.addWidget(QLabel('Prime volume'));row.addWidget(self.prime_volume_input,1);row.addWidget(self.prime_volume_unit_combo);prime.addLayout(row)
+        prime.addWidget(QLabel('Prime volume'));row=QHBoxLayout();row.addWidget(self.prime_volume_input,1);row.addWidget(self.prime_volume_unit_combo);prime.addLayout(row)
         self.prime_note=QLabel('Prime uses the selected direction and volume, then switches to the main rate. Percentages refer to the diameter-dependent pump maximum.')
         self.prime_note.setWordWrap(True);self.prime_note.setObjectName('secondaryLabel');prime.addWidget(self.prime_note);detail.addWidget(self.prime_details)
         self.summary_label=QLabel();self.summary_label.setWordWrap(True);detail.addWidget(self.summary_label)
-        self.apply_button=QPushButton('Apply and verify');self.apply_button.setObjectName('applyButton');detail.addWidget(self.apply_button)
+        self.apply_button=QPushButton('Apply and verify');self.apply_button.setObjectName('applyButton')
+        self.action_bar=QWidget();bar=QVBoxLayout(self.action_bar);bar.setContentsMargins(0,3,0,0);bar.addWidget(self.apply_button)
         self.readback_label=QLabel('No device read-back yet');self.readback_label.setWordWrap(True);detail.addWidget(self.readback_label)
         self.last_response_label=QLabel('Last response: —');self.last_response_label.setWordWrap(True);self.last_response_label.setObjectName('secondaryLabel');detail.addWidget(self.last_response_label)
         detail.addStretch()
@@ -198,7 +199,7 @@ class PumpPanel(GroupBox):
         self.diameter_input.setValue(diameter_mm);self._internal_update=False
         self.diameter_status.setText(f'✓ Verified: {diameter_mm:.2f} mm');self.diameter_status.setObjectName('successLabel')
         self.setProperty('diameterVerified',True);self.settings_applied=False;self.applied_snapshot=None
-        self.step_banner.setText('2  Delivery settings');self.step_banner.setObjectName('diameterReadyBanner')
+        self.step_banner.setText('1  Syringe diameter confirmed');self.step_banner.setObjectName('diameterReadyBanner')
         self._repolish_status_widgets();self._refresh_enabled_state()
     def invalidate_diameter(self,message):
         self.confirmed_diameter=None;self.settings_applied=False;self.applied_snapshot=None
@@ -230,13 +231,19 @@ class PumpPanel(GroupBox):
             self.last_status=status;self.last_checked=datetime.now().strftime('%H:%M:%S');self.checked_at=time.monotonic()
             self.running=status in {'I','W','X'}
             if status=='S':self.stop_pending=False
-        else:self.last_status=None
+            if status=='A':
+                self.invalidate_diameter('Alarm — check pump, stop and refresh status')
+                self.status_label.setText('● Alarm');self.status_label.setObjectName('warningLabel')
+        else:
+            self.last_status=None;self.settings_applied=False
         self.setProperty('running',self.running);self._refresh_enabled_state()
     def set_last_response(self,text):
         self.last_response_source=str(text);self.last_response_label.setText('Last response: '+str(text))
     def readiness(self):
         if not self.online:return 'No response'
         if self.busy:return 'Sending command…'
+        if self.last_status is None:return 'No confirmed status yet'
+        if self.last_status=='A':return 'Reported: Alarm'
         if self.confirmed_diameter is None:return 'Verify diameter first'
         if self.running:return 'Reported: '+self._motion()
         if not self.settings_applied:return 'Apply settings first'
@@ -245,9 +252,11 @@ class PumpPanel(GroupBox):
         from ne501.protocol import STATUS_LABELS
         return STATUS_LABELS.get(self.last_status,'Unknown')
     def _refresh_summary(self):
+        if self.online and self.last_status!='A':
+            self.status_label.setText('● Ready' if self.settings_applied and not self.running and not self.busy else '● Online')
         settings=self.applied_snapshot if self.running and self.applied_snapshot is not None else self.current_settings()
         direction='Infuse' if settings.direction=='INF' else 'Withdraw'
-        prefix='Applied' if self.settings_applied or self.running and self.applied_snapshot is not None else 'Draft'
+        prefix='Setpoint' if self.settings_applied or self.running and self.applied_snapshot is not None else 'Draft'
         self.target_label.setText(f'{prefix}: {direction} · {settings.rate:g} {RATE_LABELS[settings.rate_unit]}')
         self.mode_label.setText('Until stopped' if settings.continuous else f'Target: {settings.volume:g} {dict((c,l) for l,c in VOLUME_UNITS)[settings.volume_unit]}')
         self.target_label.setToolTip(self.mode_label.source_text)
@@ -259,9 +268,9 @@ class PumpPanel(GroupBox):
         self.summary_label.setText(f'Summary: {direction} · {self.rate_input.value():g} {RATE_LABELS[str(self.rate_unit_combo.currentData())]} · '+('Continuous' if self.continuous_checkbox.isChecked() else f'Target: {self.volume_input.value():g} {self.volume_unit_combo.currentText()}'))
     def refresh_age(self):self._refresh_summary()
     def _refresh_enabled_state(self):
-        can_set=self.online and not self.running and not self.busy
+        can_set=self.online and self.last_status is not None and self.last_status!='A' and not self.running and not self.busy
         ready=self.online and self.confirmed_diameter is not None
-        configure=ready and not self.running and not self.busy
+        configure=ready and self.last_status is not None and self.last_status!='A' and not self.running and not self.busy
         self.diameter_input.setEnabled(can_set);self.set_diameter_button.setEnabled(can_set)
         for widget in (self.rate_input,self.rate_unit_combo,self.direction_combo,self.mode_combo,self.continuous_checkbox,self.prime_enabled_checkbox):widget.setEnabled(configure)
         self.volume_input.setEnabled(configure and not self.continuous_checkbox.isChecked())
@@ -271,7 +280,7 @@ class PumpPanel(GroupBox):
         for widget in (self.prime_speed_combo,self.prime_volume_input,self.prime_volume_unit_combo):widget.setEnabled(configure and prime_on)
         self.active_checkbox.setEnabled(ready and not self.busy)
         self.apply_button.setEnabled(configure)
-        self.run_button.setEnabled(ready and self.settings_applied and not self.running and not self.busy)
+        self.run_button.setEnabled(ready and self.last_status is not None and self.last_status!='A' and self.settings_applied and not self.running and not self.busy)
         self.stop_button.setEnabled(self.connection_available or self.online)
         self.set_diameter_button.setStyleSheet('border: 2px solid #ffd166;' if can_set and not ready else '')
         self.apply_button.setStyleSheet('border: 2px solid #ffd166;' if configure and not self.settings_applied else '')

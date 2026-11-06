@@ -1,0 +1,22 @@
+NE-501 Pump Controller UI Preview v1.2.0
+
+Use the global Language menu to select English or Traditional Chinese. The choice is remembered. Changing language preserves connection and editing state and does not send pump commands.
+
+Manual Control:
+- Select a COM port, connect, and scan pumps.
+- Each card shows the logical pump number and actual network address.
+- Edit selects a pump for the independent inspector. Group checkboxes select pumps for group actions.
+- Verify the syringe inside diameter, enter delivery direction/rate and Continuous or Target volume mode, then Apply and verify.
+- Optional Prime uses the selected direction and volume before switching to the main rate. Its percentages refer to the diameter-dependent pump maximum.
+- Start is enabled only after the setup is verified. Stop does not depend on setup readiness.
+- Stop cancels old queued operations for that channel. Confirm the device response before assuming motion stopped.
+- Refresh status queries the devices. Optional automatic refresh is off by default; it checks every 2 seconds and skips busy/modal periods.
+- Raw device commands, responses and CSV logs retain their original format.
+
+Timeline Editor:
+Drag clips to move them or trim their edges. Double-click a gap to insert. Use snapping, Ctrl+wheel zoom, F to focus, Ctrl+B to split and Ctrl+Z/Ctrl+Y to undo/redo.
+Check the workflow before playback. Playback remains simulation only. The 0.1 s editing grid is separate from unmeasured hardware synchronization.
+
+This installer supports Windows x64 and ARM64 without a separate Python installation.
+It updates the UI preview and uses a separate installation/configuration from v1.0.1.
+Read DISCLAIMER.txt and the included third-party notices before controlling equipment.

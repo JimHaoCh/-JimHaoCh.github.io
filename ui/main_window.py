@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         self.ui_scale_combo.setCurrentIndex(min(range(self.ui_scale_combo.count()),key=lambda i:abs(self.ui_scale_combo.itemData(i)-scale)))
         self.ui_scale_combo.setToolTip('Adjust application text and control size')
         self.connection_label=QLabel('● Disconnected');self.connection_label.setObjectName('offlineStatus')
-        self.emergency_button=QPushButton('EMERGENCY STOP ALL');self.emergency_button.setObjectName('emergencyButton')
+        self.emergency_button=QPushButton('Stop all pumps');self.emergency_button.setObjectName('emergencyButton')
         self.emergency_button.setToolTip('連線後停止所有實際幫浦；時間軌模擬請使用頁面內的停止。')
         common=QHBoxLayout();common.addWidget(QLabel('Language'));common.addWidget(self.language_combo)
         common.addWidget(QLabel('UI size'));common.addWidget(self.ui_scale_combo);common.addWidget(self.connection_label);common.addStretch();common.addWidget(self.emergency_button)
@@ -55,10 +55,10 @@ class MainWindow(QMainWindow):
         self.workflow_banner=QLabel('Manual control: commands operate connected pumps.');self.workflow_banner.setObjectName('workflowBanner');self.workflow_banner.setWordWrap(True)
 
         self.panels={};panel_grid=QGridLayout();panel_grid.setContentsMargins(0,0,0,0);panel_grid.setSpacing(7)
-        self.editor_stack=QStackedWidget()
+        self.editor_stack=QStackedWidget();self.action_stack=QStackedWidget()
         for index,address in enumerate(self.addresses):
             panel=PumpPanel(address,index=index+1)
-            self.panels[address]=panel;panel_grid.addWidget(panel,index//2,index%2);self.editor_stack.addWidget(panel.editor)
+            self.panels[address]=panel;panel_grid.addWidget(panel,index//2,index%2);self.editor_stack.addWidget(panel.editor);self.action_stack.addWidget(panel.action_bar)
             panel.set_diameter_requested.connect(self.set_diameter);panel.apply_requested.connect(self.apply_single)
             panel.run_requested.connect(self.run_single);panel.stop_requested.connect(self.stop_single)
             panel.edit_requested.connect(self.select_pump);panel.state_changed.connect(self.refresh_group_controls)
@@ -67,7 +67,9 @@ class MainWindow(QMainWindow):
         self.editor_scroll=QScrollArea();self.editor_scroll.setWidgetResizable(True);self.editor_scroll.setWidget(self.editor_stack)
         self.editor_scroll.setMinimumWidth(290);self.editor_scroll.setMaximumWidth(390)
         self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.manual_splitter=QSplitter(Qt.Orientation.Horizontal);self.manual_splitter.addWidget(self.panel_scroll);self.manual_splitter.addWidget(self.editor_scroll)
+        self.editor_container=QWidget();right=QVBoxLayout(self.editor_container);right.setContentsMargins(0,0,0,0);right.setSpacing(3);right.addWidget(self.editor_scroll,1);right.addWidget(self.action_stack)
+        self.editor_container.setMinimumWidth(290);self.editor_container.setMaximumWidth(390)
+        self.manual_splitter=QSplitter(Qt.Orientation.Horizontal);self.manual_splitter.addWidget(self.panel_scroll);self.manual_splitter.addWidget(self.editor_container)
         self.manual_splitter.setStretchFactor(0,1);self.manual_splitter.setStretchFactor(1,0);self.manual_splitter.setSizes([870,330])
         self.select_all_button=QPushButton('Select available');self.select_all_button.setToolTip('Only online pumps with a verified diameter are included.');self.clear_active_button=QPushButton('Clear selection')
         self.apply_active_button=QPushButton('Apply selected');self.apply_active_button.setObjectName('applyButton')
@@ -122,7 +124,7 @@ class MainWindow(QMainWindow):
         self.connection_controls.setVisible(index==0)
         if self.timeline_editor is not None and index!=1 and self.timeline_editor.running:self.timeline_editor.pause_preview()
     def select_pump(self,address):
-        self.selected_address=address;self.editor_stack.setCurrentWidget(self.panels[address].editor)
+        self.selected_address=address;self.editor_stack.setCurrentWidget(self.panels[address].editor);self.action_stack.setCurrentWidget(self.panels[address].action_bar)
         self.editor_scroll.verticalScrollBar().setValue(0)
         for key,panel in self.panels.items():panel.set_selected(key==address)
     def apply_ui_scale(self,*_):
@@ -131,8 +133,9 @@ class MainWindow(QMainWindow):
     def refresh_group_controls(self,*_):
         if not hasattr(self,'group_label'):return
         connected=self.controller is not None and self.controller.is_connected
+        self.workflow_banner.setText('Manual simulation: commands use simulated pumps only.' if isinstance(self.controller,MockNE501Controller) else 'Manual control: commands operate connected pumps.')
         panels=self.active_panels()
-        can_apply=connected and bool(panels) and all(p.online and p.confirmed_diameter is not None and not p.busy and not p.running for p in panels)
+        can_apply=connected and bool(panels) and all(p.online and p.last_status not in (None,'A') and p.confirmed_diameter is not None and not p.busy and not p.running for p in panels)
         can_run=can_apply and all(p.settings_applied for p in panels)
         self.apply_active_button.setEnabled(can_apply);self.run_active_button.setEnabled(can_run)
         self.stop_active_button.setEnabled(connected and bool(panels))
@@ -153,12 +156,14 @@ class MainWindow(QMainWindow):
         for panel in self.panels.values():panel.set_connection_available(enabled)
         self.refresh_group_controls()
     def maybe_refresh_status(self):
-        if self.auto_refresh_checkbox.isChecked() and self.mode_tabs.currentIndex()==0 and self.controller is not None and self.controller.is_connected and not self.pending_tasks:self.refresh_status()
+        if self.auto_refresh_checkbox.isChecked() and self.mode_tabs.currentIndex()==0 and self.controller is not None and self.controller.is_connected and not self.pending_tasks and QApplication.activeModalWidget() is None:self.refresh_status()
     def refresh_status(self):
         if not self.require_connection() or self.pending_tasks:return
+        ticket=self.task_gate.ordinary_ticket()
         def action():
             outcomes=[]
             for address in self.addresses:
+                if ticket is None or not self.task_gate.is_current(ticket):break
                 try:outcomes.append((address,self.controller.send_command(address,''),None))
                 except Exception as exc:outcomes.append((address,None,str(exc)))
             return outcomes
@@ -416,9 +421,13 @@ class MainWindow(QMainWindow):
             if not self.require_panel_ready(panel,False):return
         try:plan=[(p,self.build_program_settings(p,p.current_settings())) for p in panels]
         except ValueError as exc:QMessageBox.warning(self,'Invalid Settings',str(exc));return
+        ticket=self.task_gate.ordinary_ticket()
+        generations={p.address:self._pump_generation.get(p.address,0) for p in panels}
         def action():
             outcomes=[]
             for panel,settings in plan:
+                if ticket is None or not self.task_gate.is_current(ticket) or any(self._pump_generation.get(a,0)!=g for a,g in generations.items()):
+                    outcomes.append((panel.address,None,'Not sent after STOP request'));continue
                 try:outcomes.append((panel.address,self.controller.configure_program(panel.address,settings),None))
                 except Exception as exc:outcomes.append((panel.address,None,str(exc)))
             return outcomes
@@ -509,9 +518,13 @@ class MainWindow(QMainWindow):
                 panel.set_stop_pending()
             self.run_task(lambda:stop_all_independently(self.controller,[p.address for p in panels]),self.present_stop_report,panels=panels,priority=50)
             return
+        ticket=self.task_gate.ordinary_ticket()
+        generations={p.address:self._pump_generation.get(p.address,0) for p in panels}
         def action():
             outcomes=[];failed=False
             for panel in panels:
+                if ticket is None or not self.task_gate.is_current(ticket) or any(self._pump_generation.get(a,0)!=g for a,g in generations.items()):
+                    outcomes.append((panel.address,None,'Not sent after STOP request'));continue
                 if failed:outcomes.append((panel.address,None,'Not sent after an earlier group error'));continue
                 try:
                     response=self.controller.send_command(panel.address,command)
@@ -523,7 +536,7 @@ class MainWindow(QMainWindow):
             good=bad=not_sent=0
             for address,response,error in outcomes:
                 panel=self.panels[address]
-                if error=='Not sent after an earlier group error':
+                if error in ('Not sent after an earlier group error','Not sent after STOP request'):
                     not_sent+=1;panel.set_last_response(error)
                 elif error:
                     bad+=1;panel.set_online(False);panel.set_last_response(error)
@@ -629,6 +642,9 @@ class MainWindow(QMainWindow):
             return False
         if not panel.online:
             QMessageBox.warning(self, panel.title(), "Pump is offline.")
+            return False
+        if panel.last_status in (None, "A"):
+            QMessageBox.warning(self, panel.title(), "Update the pump status before applying settings or starting.")
             return False
         if panel.confirmed_diameter is None:
             QMessageBox.warning(self, panel.title(), "Set and verify the syringe inside diameter first.")

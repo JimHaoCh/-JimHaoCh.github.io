@@ -264,6 +264,12 @@ CATALOG.extend((en, zh) for zh, en in FLOW)
 
 CATALOG.extend([
 ('Stop pending — awaiting response','正在停止，等候設備回應'),
+('● Ready','● 就緒'),
+('Not sent after STOP request','停止要求後未傳送'),
+('Stop all pumps','停止所有幫浦'),('1  Syringe diameter confirmed','1  針筒內徑已確認'),
+('Manual simulation: commands use simulated pumps only.','手動模擬：指令僅作用於模擬幫浦。'),
+('Update the pump status before applying settings or starting.','請先更新幫浦狀態，再套用設定或啟動。'),
+('● Alarm','● 警報'),('Alarm — check pump, stop and refresh status','設備警報：請檢查幫浦、停止並更新狀態'),
 ('Only online pumps with a verified diameter are included.','僅勾選已連線且內徑已確認的幫浦。'),
 ('Wait for the current operation to finish.','請等待目前操作完成。'),
 ('A timeline requires four pump addresses.','時間軌需要四個幫浦位址。'),

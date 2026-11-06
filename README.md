@@ -1,42 +1,32 @@
-# NE-501 Multi Pump Controller v1.0.1
+# NE-501 Multi Pump Controller — UI Preview v1.2.0
 
-獨立的研究與教學軟體，以 New Era NE-501 多台針筒幫浦 RS-232 控制為目標。
-本專案與原廠無隸屬、授權或背書關係。預設四台泵浦，位址 00–03。
-目前是 v1.0.1 候選版，需完成 Windows 建置及實體泵浦驗證。
+Four-pump manual control and a visual timeline editor with global Traditional Chinese / English switching.
 
-**使用前請閱讀 [免責與安全說明](DISCLAIMER.txt)。** 程式未提供臨床驗證
-資料，請勿用於人體輸注或臨床治療。軟體全停止依賴通訊，操作設備時
-請保留獨立的實體斷電或緊急停止方式；Prime 選項不測量或限制壓力。
+本版提供繁體中文／English 即時切換、四台幫浦摘要卡、獨立設定區、群組就緒判斷與狀態回讀。操作語言與控制資料分離，切換語言不會新增設備指令。
 
-Windows x64 and Windows 11 ARM64 build project, derived from v1.0.0.
-This is independent research/educational software with no manufacturer
-affiliation or endorsement. The v1.0.1 candidate requires hardware validation.
-See [DISCLAIMER.txt](DISCLAIMER.txt) before operation.
+**手動控制會操作已連線設備；時間軌播放維持模擬。** 0.1 秒為編輯刻度，實機四幫浦同步誤差尚未量測。本專案與原廠無隸屬或背書關係，使用前請閱讀 [DISCLAIMER.txt](DISCLAIMER.txt)。
 
-For the M5 Mac / Parallels workflow see `README_Build.txt`.
-For users of a successfully built installer see `QUICK_START_Traditional_Chinese.txt`.
-References, credits and suggested citation are in [REFERENCES.md](REFERENCES.md).
-Third-party license information is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## 使用
 
-The installer script combines separately built x64 and ARM64 onedir applications.
-The GitHub Actions workflow builds both, compiles a single Inno Setup installer,
-and tests installation, executable architecture, simulation and uninstall on
-Windows runners. The workflow must run successfully before distribution.
+- [版本下載](https://github.com/JimHaoCh/-JimHaoCh.github.io/releases)
+- [繁體中文快速說明](TIMELINE_PREVIEW_README_zh.txt)
+- [English quick start](BILINGUAL_UI_QUICK_START_en.txt)
+- [雙語與手動介面設計、驗證範圍](BILINGUAL_MANUAL_UI_v1.2.0.md)
+- [時間軌審查紀錄](UI_REVIEW_2026-11-06.md)
+- [參考來源](REFERENCES.md)／[引用資料](CITATION.cff)
 
-The pump protocol and Prime/steady-flow commands are based on v1.0.0. Changes:
+Windows x64／Windows 11 ARM64 共用安裝程式，使用者無須另裝 Python。預覽版使用與 v1.0.1 分開的安裝位置與設定；此版更新既有 UI Preview。
 
-* Per-user JSON configuration is retained across upgrades and uninstall.
-* STOP ALL attempts remaining addresses after one pump times out; the display
-  marks unconfirmed responses explicitly.
-* A STOP ALL request invalidates queued operations, including queued RUN.
-  An operation already executing must finish before the software stop runs.
-* Worker callbacks are queued onto Qt's GUI thread.
-* A simulation-only executable smoke test is available to the build pipeline.
+Manual Control operates connected pumps. Timeline playback remains simulation only. Device synchronization, delivered flow and tubing behavior require hardware measurements.
 
-The software stop depends on the PC, virtual machine, serial adapter, cables and
-pump. It is not an independent hardware safety circuit. No pressure sensing or
-continuous telemetry has been added. Follow the existing lab SOP and verify all
-four pumps before unattended operation.
+## 從原始碼執行
 
-Documentation marked v1.0.0 describes the earlier version. The project-specific
-source-code license has not been designated. Third-party licenses still apply.
+Use matching-architecture Python 3.12 and install requirements.txt. Then run:
+
+    python build/fetch_ui_font.py
+    python build/copy_qt_translation.py
+    python main.py
+
+字型從固定來源下載並驗證 SHA-256，保持原版內容並附 OFL 授權。Qt 標準繁體中文文字由已安裝的 PySide6 套件複製。完整建置與安裝程序見 build/、README_Build.txt 及 .github/workflows/windows-build.yml。
+
+Windows CI 在 x64 與 ARM64 執行回歸測試、封裝後 GUI 啟動，以及安裝、架構辨識和解除安裝驗證；檢查完成才發布預覽安裝檔。

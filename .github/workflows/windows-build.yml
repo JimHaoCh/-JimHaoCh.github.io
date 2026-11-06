@@ -65,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $files = Get-ChildItem screenshots -Recurse -Filter '*.png' | Select-Object -First 40
+          $files = Get-ChildItem screenshots -Recurse -Filter '*.png' | Select-Object -First 64
           foreach ($file in $files) {
             $payload = @{mime_type='image/png';filename=$file.Name;data=[Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))} | ConvertTo-Json -Compress
             $body = @{encoding='utf-8';content=$payload} | ConvertTo-Json -Compress
@@ -137,6 +137,10 @@ jobs:
         with:
           name: ui-preview-x64
           path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-shots-x64
+          path: release/ui-shots
       - name: Create SHA-256 checksum
         shell: pwsh
         run: |
@@ -150,12 +154,16 @@ jobs:
             release/NE501_Timeline_UI_Preview_Setup.exe
             release/SHA256.txt
             release/ui-preview-x64.png
+            release/ui-shots/ui-shots-source/manual-zh_TW-1280-100.png
+            release/ui-shots/ui-shots-source/manual-en-1280-100.png
+            release/ui-shots/ui-shots-source/timeline-zh_TW-1280-100.png
+            release/ui-shots/ui-shots-source/timeline-en-1280-100.png
           if-no-files-found: error
           retention-days: 30
 
   publish-prerelease:
-    needs: verified-artifact
-    if: ${{ false }}
+    needs: [verified-artifact, ui-review]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/ne501-timeline-ui-preview-20261106'
     runs-on: windows-2022
     permissions:
       contents: write
@@ -171,5 +179,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = 'ne501-timeline-ui-preview-${{ github.run_number }}'
-          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview v1.2.0 Bilingual UI (Timeline Simulation)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_Timeline_UI_Preview_Setup.exe' 'release/SHA256.txt' 'release/ui-preview-x64.png' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt' 'UI_REVIEW_2026-11-06.md'
+          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview v1.2.0 Bilingual UI (Timeline Simulation)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_Timeline_UI_Preview_Setup.exe' 'release/SHA256.txt' 'release/ui-preview-x64.png' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt' 'UI_REVIEW_2026-11-06.md' 'BILINGUAL_MANUAL_UI_v1.2.0.md' 'BILINGUAL_UI_QUICK_START_en.txt' 'release/ui-shots/ui-shots-source/manual-zh_TW-1280-100.png' 'release/ui-shots/ui-shots-source/manual-en-1280-100.png' 'release/ui-shots/ui-shots-source/timeline-zh_TW-1280-100.png' 'release/ui-shots/ui-shots-source/timeline-en-1280-100.png'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed. The verified artifact remains available in this Actions run.' }
