@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.manual_splitter=QSplitter(Qt.Orientation.Horizontal);self.manual_splitter.addWidget(self.panel_scroll);self.manual_splitter.addWidget(self.editor_scroll)
         self.manual_splitter.setStretchFactor(0,1);self.manual_splitter.setStretchFactor(1,0);self.manual_splitter.setSizes([870,330])
-        self.select_all_button=QPushButton('Select all ready');self.clear_active_button=QPushButton('Clear selection')
+        self.select_all_button=QPushButton('Select available');self.select_all_button.setToolTip('Only online pumps with a verified diameter are included.');self.clear_active_button=QPushButton('Clear selection')
         self.apply_active_button=QPushButton('Apply selected');self.apply_active_button.setObjectName('applyButton')
         self.run_active_button=QPushButton('Start selected');self.run_active_button.setObjectName('runButton')
         self.stop_active_button=QPushButton('Stop selected');self.stop_active_button.setObjectName('stopButton')
@@ -138,7 +138,10 @@ class MainWindow(QMainWindow):
         self.stop_active_button.setEnabled(connected and bool(panels))
         self.clear_active_button.setEnabled(bool(panels))
         self.select_all_button.setEnabled(connected and any(p.online and p.confirmed_diameter is not None and not p.busy for p in self.panels.values()))
-        self.emergency_button.setEnabled(connected)
+        self.emergency_button.setEnabled(connected and self.task_gate.ordinary_ticket() is not None)
+        self.connect_button.setEnabled(not self.pending_tasks)
+        self.port_combo.setEnabled(not connected and not self.pending_tasks)
+        self.refresh_button.setEnabled(not connected and not self.pending_tasks)
         self.scan_button.setEnabled(connected and not self.pending_tasks)
         self.refresh_status_button.setEnabled(connected and not self.pending_tasks)
         self.auto_refresh_checkbox.setEnabled(connected)
@@ -197,6 +200,7 @@ class MainWindow(QMainWindow):
             self.connect_controller()
 
     def connect_controller(self) -> None:
+        if self.pending_tasks: return
         port = str(self.port_combo.currentData() or "")
         if not port:
             QMessageBox.warning(self, "No Port Selected", "Select a COM port.")
@@ -628,6 +632,9 @@ class MainWindow(QMainWindow):
             return False
         if panel.confirmed_diameter is None:
             QMessageBox.warning(self, panel.title(), "Set and verify the syringe inside diameter first.")
+            return False
+        if panel.busy:
+            QMessageBox.warning(self, panel.title(), "Wait for the current operation to finish.")
             return False
         if panel.running:
             QMessageBox.warning(self, panel.title(), "The pump is running. Press STOP before changing settings or starting again.")

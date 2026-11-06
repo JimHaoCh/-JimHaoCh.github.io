@@ -39,6 +39,18 @@ QGroupBox#pumpPanel[running="true"] {{
     border-color: #24a148;
 }}
 QGroupBox#pumpPanel[selected="true"] {{ border: 2px solid #4d7cff; }}
+QGroupBox#pumpPanel QLabel {{
+    font-size: {pt(9.0)};
+}}
+QGroupBox#pumpPanel QLabel#pumpTarget {{
+    font-size: {pt(10.0)};
+    font-weight: 700;
+}}
+QGroupBox#pumpPanel QPushButton {{
+    min-height: {px(22)}px;
+    padding: 3px 7px;
+    font-size: {pt(9.5)};
+}}
 QGroupBox#pumpPanel::title {{
     subcontrol-origin: margin;
     left: {px(12)}px;

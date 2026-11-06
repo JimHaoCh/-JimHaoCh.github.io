@@ -38,6 +38,7 @@ class BilingualManualTests(unittest.TestCase):
         self.win.close();manager.set_language('zh_TW');self.temp.cleanup()
     def ready_mock(self):
         self.win.controller=MockNE501Controller([0,1,2,3],latency=0);self.win.controller.connect('MOCK',19200)
+        self.win.connection_label.setText('● Connected MOCK');self.win.connect_button.setText('Disconnect')
         self.win._set_group_buttons_enabled(True)
         for panel in self.win.panels.values():panel.set_online(True);panel.update_from_status('S')
     def wait_idle(self):
@@ -115,6 +116,12 @@ class BilingualManualTests(unittest.TestCase):
     def test_both_modes_languages_sizes_and_scales_fit_and_capture(self):
         shots=Path(__file__).resolve().parents[1]/'builds/ui-shots-source';shots.mkdir(parents=True,exist_ok=True)
         problems=[]
+        self.ready_mock()
+        for address in (0,1,3):
+            self.win.panels[address].confirm_diameter(10);self.win.panels[address].mark_settings_applied()
+        self.win.panels[1].update_from_status('I')
+        self.win.panels[3].continuous_checkbox.setChecked(False);self.win.panels[3].direction_combo.setCurrentIndex(1)
+        self.win.panels[3].mark_settings_applied()
         for language in ('zh_TW','en'):
             manager.set_language(language)
             for scale in (1.,1.3):
@@ -133,3 +140,43 @@ class BilingualManualTests(unittest.TestCase):
                                 if not viewport.rect().contains(point) or point.y()+panel.stop_button.height()>viewport.height():
                                     problems.append((filename.name,'stop',address,point.toTuple(),viewport.size().toTuple(),panel.size().toTuple()))
         self.assertFalse(problems,problems)
+
+    def test_group_apply_reports_successes_when_one_pump_fails(self):
+        self.ready_mock()
+        for panel in self.win.panels.values():panel.confirm_diameter(10);panel.set_active(True)
+        original=self.win.controller.configure_program
+        def configure(address,settings):
+            if address==1:raise RuntimeError('Simulated channel failure')
+            return original(address,settings)
+        with patch.object(self.win.controller,'configure_program',side_effect=configure),patch('ui.main_window.QMessageBox.warning'):
+            self.win.apply_active();self.wait_idle()
+        self.assertTrue(self.win.panels[0].settings_applied)
+        self.assertFalse(self.win.panels[1].online)
+        self.assertTrue(self.win.panels[2].settings_applied)
+        self.assertTrue(self.win.panels[3].settings_applied)
+    def test_group_run_stops_sending_after_first_error(self):
+        self.ready_mock()
+        for address in (0,1,2):
+            panel=self.win.panels[address];panel.confirm_diameter(10);panel.mark_settings_applied();panel.set_active(True)
+        original=self.win.controller.send_command
+        sent=[]
+        def send(address,command):
+            if command=='RUN 1':
+                sent.append(address)
+                if address==1:raise RuntimeError('Simulated channel failure')
+            return original(address,command)
+        with patch.object(self.win.controller,'send_command',side_effect=send),patch('ui.main_window.QMessageBox.warning'):
+            self.win.run_active();self.wait_idle()
+        self.assertEqual(sent,[0,1])
+        self.assertTrue(self.win.panels[0].running)
+        self.assertFalse(self.win.panels[2].running)
+        self.assertEqual(self.win.panels[2].last_response_source,'Not sent after an earlier group error')
+    def test_manual_and_timeline_use_same_logical_index_and_custom_addresses(self):
+        isolated=QSettings(str(Path(self.temp.name)/'custom.ini'),QSettings.Format.IniFormat)
+        other=MainWindow({'addresses':[5,7,8,9]},settings=isolated)
+        try:
+            self.assertEqual(other.timeline_editor.model.addresses,[5,7,8,9])
+            for index,address in enumerate([5,7,8,9],1):
+                self.assertEqual(other.panels[address].index,index)
+                self.assertEqual(other.panels[address].address,address)
+        finally:other.close()

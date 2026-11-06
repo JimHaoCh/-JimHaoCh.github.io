@@ -67,12 +67,13 @@ jobs:
         run: |
           $files = Get-ChildItem screenshots -Recurse -Filter '*.png' | Select-Object -First 40
           foreach ($file in $files) {
-            $body = @{encoding='base64';content=[Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))} | ConvertTo-Json -Compress
+            $payload = @{mime_type='image/png';filename=$file.Name;data=[Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))} | ConvertTo-Json -Compress
+            $body = @{encoding='utf-8';content=$payload} | ConvertTo-Json -Compress
             $inputFile = Join-Path $env:TEMP 'ui-blob.json'
             [IO.File]::WriteAllText($inputFile, $body)
             $sha = gh api --method POST 'repos/${{ github.repository }}/git/blobs' --input $inputFile --jq '.sha'
             if ($LASTEXITCODE -ne 0) { throw 'UI review blob upload failed.' }
-            Write-Host ("UI_BLOB " + $file.FullName.Replace('\','/') + " " + $sha)
+            Write-Host ("UI_IMAGE_JSON " + $file.FullName.Replace('\','/') + " " + $sha)
           }
 
   installer:

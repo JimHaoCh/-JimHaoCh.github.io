@@ -13,10 +13,11 @@ class LanguageManager(QObject):
         self._qt_translator = None
     def set_language(self, language):
         language = 'en' if language == 'en' else 'zh_TW'
+        if self.language==language and (language=='en' or self._qt_translator is not None): return
         app=QCoreApplication.instance()
         if app is not None:
             if self._qt_translator is not None:
-                app.removeTranslator(self._qt_translator);self._qt_translator=None
+                app.removeTranslator(self._qt_translator);self._qt_translator.deleteLater();self._qt_translator=None
             if language=='zh_TW':
                 translator=QTranslator(app)
                 if translator.load(str(resource_path('assets/translations/qtbase_zh_TW.qm'))):
@@ -40,7 +41,7 @@ CATALOG = [
 ('● Disconnected','● 尚未連線'),('● Connected {raw0}','● 已連線 {raw0}'),
 ('EMERGENCY STOP ALL','停止所有幫浦'),('Command / response log','指令／回應紀錄'),
 ('Show diagnostics','顯示通訊紀錄'),('Manual control: commands operate connected pumps.','手動控制：操作會傳送至已連線的幫浦。'),
-('Select all ready','勾選就緒幫浦'),('Clear selection','清除勾選'),
+('Select available','全選可用'),('Clear selection','清除勾選'),
 ('Apply selected','套用勾選'),('Start selected','啟動勾選'),('Stop selected','停止勾選'),
 ('{raw0} selected | Addresses: {raw1}','已勾選 {raw0} 台｜位址：{raw1}'),
 ('Select pumps for group actions.','請勾選要進行群組操作的幫浦。'),
@@ -263,6 +264,8 @@ CATALOG.extend((en, zh) for zh, en in FLOW)
 
 CATALOG.extend([
 ('Stop pending — awaiting response','正在停止，等候設備回應'),
+('Only online pumps with a verified diameter are included.','僅勾選已連線且內徑已確認的幫浦。'),
+('Wait for the current operation to finish.','請等待目前操作完成。'),
 ('A timeline requires four pump addresses.','時間軌需要四個幫浦位址。'),
 ('Time must be a finite number','時間須為有限數值'),('Time must be in 0.1-second increments','時間須以 0.1 秒為單位'),
 ('Total duration must be an integer','總長度必須為整數'),('Pump index must be an integer','幫浦索引必須為整數'),
