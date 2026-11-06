@@ -17,6 +17,9 @@ from PySide6.QtWidgets import (
 from ne501.timeline_model import Clip, Timeline, UNITS, example_timeline, format_time
 from .timeline_canvas import TimelineCanvas
 
+from .i18n_widgets import Label as QLabel, Button as QPushButton, ComboBox as QComboBox, CheckBox as QCheckBox, SpinBox as QDoubleSpinBox, MessageBox as QMessageBox, FileDialog as QFileDialog
+
+
 
 class FocusSpinBox(QDoubleSpinBox):
     """Scrolling an inspector must not silently change a pump setting."""
@@ -156,7 +159,7 @@ class TimelineEditor(QWidget):
         self.rate_spin = FocusSpinBox(); self.rate_spin.setDecimals(4); self.rate_spin.setRange(.0001, 9999)
         self.rate_spin.setKeyboardTracking(False)
         self.unit_combo = FocusComboBox(); self.unit_combo.addItems(UNITS)
-        for label, field in [('開始 s', self.start_spin), ('結束 s', self.end_spin), ('方向', self.direction_combo), ('流速', self.rate_spin), ('單位', self.unit_combo)]: form.addRow(label, field)
+        for label, field in [('開始 s', self.start_spin), ('結束 s', self.end_spin), ('方向', self.direction_combo), ('流速', self.rate_spin), ('單位', self.unit_combo)]: form.addRow(QLabel(label), field)
         side.addLayout(form)
         self.length_label = QLabel(); self.volume_label = QLabel()
         side.addWidget(self.length_label); side.addWidget(self.volume_label)

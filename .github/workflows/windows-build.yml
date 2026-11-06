@@ -39,6 +39,41 @@ jobs:
           path: builds/ui-preview-${{ matrix.arch }}.png
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-shots-${{ matrix.arch }}
+          path: |
+            builds/ui-shots-source/*.png
+            builds/ui-shots-${{ matrix.arch }}/*.png
+          if-no-files-found: ignore
+          retention-days: 30
+
+  ui-review:
+    needs: application
+    if: always()
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ui-shots-*
+          path: screenshots
+      - name: Record review screenshots as Git blobs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = Get-ChildItem screenshots -Recurse -Filter '*.png' | Select-Object -First 40
+          foreach ($file in $files) {
+            $body = @{encoding='base64';content=[Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName))} | ConvertTo-Json -Compress
+            $inputFile = Join-Path $env:TEMP 'ui-blob.json'
+            [IO.File]::WriteAllText($inputFile, $body)
+            $sha = gh api --method POST 'repos/${{ github.repository }}/git/blobs' --input $inputFile --jq '.sha'
+            if ($LASTEXITCODE -ne 0) { throw 'UI review blob upload failed.' }
+            Write-Host ("UI_BLOB " + $file.FullName.Replace('\','/') + " " + $sha)
+          }
 
   installer:
     needs: application
@@ -119,7 +154,7 @@ jobs:
 
   publish-prerelease:
     needs: verified-artifact
-    if: github.event_name == 'push' && github.ref == 'refs/heads/ne501-timeline-ui-preview-20261106'
+    if: ${{ false }}
     runs-on: windows-2022
     permissions:
       contents: write
@@ -135,5 +170,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = 'ne501-timeline-ui-preview-${{ github.run_number }}'
-          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview v1.1.1 (Simulation Only)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_Timeline_UI_Preview_Setup.exe' 'release/SHA256.txt' 'release/ui-preview-x64.png' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt' 'UI_REVIEW_2026-11-06.md'
+          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview v1.2.0 Bilingual UI (Timeline Simulation)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_Timeline_UI_Preview_Setup.exe' 'release/SHA256.txt' 'release/ui-preview-x64.png' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt' 'UI_REVIEW_2026-11-06.md'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed. The verified artifact remains available in this Actions run.' }

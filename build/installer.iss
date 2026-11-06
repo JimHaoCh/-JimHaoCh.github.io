@@ -1,5 +1,5 @@
 #define MyAppName "NE-501 Timeline UI Preview"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.2.0"
 #define MyAppExeName "NE501_Multi_Pump_Controller.exe"
 
 [Setup]
@@ -28,6 +28,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
+Source: "..\BILINGUAL_MANUAL_UI_v1.2.0.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\UI_REVIEW_2026-11-06.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\fonts\OFL.txt"; DestDir: "{app}\docs\NotoSansCJK"; Flags: ignoreversion
 Source: "..\assets\fonts\FONT_NOTICE.txt"; DestDir: "{app}\docs\NotoSansCJK"; Flags: ignoreversion

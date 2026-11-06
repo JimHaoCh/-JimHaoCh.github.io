@@ -26,18 +26,19 @@ QGroupBox#pumpPanel {{
     border: 1px solid #3a4350;
     border-radius: {px(10)}px;
     margin-top: {px(14)}px;
-    padding: {px(12)}px;
+    padding: 3px;
     font-weight: 600;
 }}
 QGroupBox#pumpPanel[online="true"][diameterVerified="false"] {{
     border: 2px solid #d59a2f;
 }}
-QGroupBox#pumpPanel[active="true"] {{
+QGroupBox#pumpPanel[selected="true"] {{
     border: 2px solid #4d7cff;
 }}
 QGroupBox#pumpPanel[running="true"] {{
-    border: 2px solid #24a148;
+    border-color: #24a148;
 }}
+QGroupBox#pumpPanel[selected="true"] {{ border: 2px solid #4d7cff; }}
 QGroupBox#pumpPanel::title {{
     subcontrol-origin: margin;
     left: {px(12)}px;

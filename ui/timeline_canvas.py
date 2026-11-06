@@ -10,6 +10,9 @@ from PySide6.QtWidgets import QMenu, QWidget
 
 from ne501.timeline_model import Clip, Timeline, format_time
 
+from .i18n import manager, tr
+from .i18n_widgets import Painter as QPainter, Menu as QMenu
+
 COLORS = ('#4387e8', '#2ca77e', '#c88838', '#936cc9')
 
 
@@ -48,8 +51,18 @@ class TimelineCanvas(QWidget):
         self.setMinimumSize(350, 230)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setAccessibleName('四幫浦時間軌')
+        self.setAccessibleName(tr('四幫浦時間軌'))
+        manager.changed.connect(self._language_changed)
         self.setToolTip('拖曳移動；左右邊界調整長度；Ctrl＋滾輪縮放。')
+
+    def setToolTip(self,text):
+        self._tooltip_source=str(text)
+        super().setToolTip(tr(text))
+
+    def _language_changed(self):
+        self.setAccessibleName(tr('四幫浦時間軌'))
+        super().setToolTip(tr(getattr(self,'_tooltip_source','')))
+        self.update()
 
     def row_height(self):
         return (self.height() - self.TOP - 8) / 4

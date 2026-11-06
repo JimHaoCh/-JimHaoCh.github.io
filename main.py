@@ -15,6 +15,7 @@ from ne501.config import load_config, resource_path
 from ui.main_window import MainWindow
 from ui.style import build_stylesheet
 from ui.fonts import configure_ui_font
+from ui.i18n import manager
 from ne501.mock_controller import MockNE501Controller
 
 
@@ -79,6 +80,15 @@ def run_smoke_test(report_path: Path) -> int:
     timeline = window.timeline_editor
     if not window.grab().save(str(report_path.parent / 'timeline-preview.png')):
         raise RuntimeError('Unable to render timeline preview screenshot')
+    for language in ('zh_TW','en'):
+        manager.set_language(language)
+        for index,name in ((0,'manual'),(1,'timeline')):
+            window.mode_tabs.setCurrentIndex(index)
+            app.processEvents()
+            if not window.grab().save(str(report_path.parent / f'{name}-{language}.png')):
+                raise RuntimeError('UI screenshot failed')
+    manager.set_language('zh_TW')
+    window.mode_tabs.setCurrentIndex(1)
     timeline.canvas.grab()
     timeline.check_flow()
     if not timeline.play_button.isEnabled():
@@ -117,7 +127,7 @@ def run_smoke_test(report_path: Path) -> int:
     )
     window.emergency_stop()
     wait_until(lambda: window.pending_tasks == 0, "simulated STOP ALL")
-    if not all("STOP confirmed" in panel.last_response_label.text() for panel in window.panels.values()):
+    if not all(panel.last_status == "S" and panel.last_response_source == "STOP confirmed by pump response" for panel in window.panels.values()):
         raise RuntimeError("Simulated STOP ALL did not confirm every pump")
     window.controller.disconnect()
     window.controller = None

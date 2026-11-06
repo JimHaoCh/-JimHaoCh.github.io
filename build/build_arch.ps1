@@ -59,6 +59,7 @@ Run-Checked $Python @('-m', 'venv', $venv)
 $vp = Join-Path $venv 'Scripts\python.exe'
 Run-Checked $vp @('-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements.txt', '-r', 'requirements-build.txt')
 Run-Checked $vp @('build/fetch_ui_font.py')
+Run-Checked $vp @('build/copy_qt_translation.py')
 Run-Checked $vp @('-m', 'compileall', '-q', 'main.py', 'ne501', 'ui', 'tests')
 Run-Checked $vp @('-m', 'unittest', 'discover', '-s', 'tests', '-v')
 
@@ -101,6 +102,9 @@ try {
     Get-Content -Raw $report | Write-Host
     Copy-Item (Join-Path $smokeDir 'timeline-preview.png') (Join-Path (Get-Location) "builds\ui-preview-$Arch.png") -Force
 } finally {
+    $capture = Join-Path (Get-Location) "builds\ui-shots-$Arch"
+    New-Item -ItemType Directory -Force -Path $capture | Out-Null
+    if (Test-Path $smokeDir) { Get-ChildItem $smokeDir -Filter '*.png' | Copy-Item -Destination $capture -Force }
     $env:QT_QPA_PLATFORM = $oldQt
     $env:LOCALAPPDATA = $oldLocal
     Remove-Item -Recurse -Force $smokeDir -ErrorAction SilentlyContinue
