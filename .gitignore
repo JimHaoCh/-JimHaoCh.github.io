@@ -7,3 +7,5 @@ dist/
 release/
 *.spec
 *.log
+assets/fonts/*.otf
+assets/fonts/*.part

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication
 from ne501.config import load_config, resource_path
 from ui.main_window import MainWindow
 from ui.style import build_stylesheet
+from ui.fonts import configure_ui_font
 from ne501.mock_controller import MockNE501Controller
 
 
@@ -37,6 +38,7 @@ def main() -> int:
     app.setApplicationName("NE501 Multi Pump Controller")
     app.setOrganizationName("NE501Controller")
     app.setStyle("Fusion")
+    configure_ui_font(app)
 
     settings = QSettings("NE501Controller", "NE501 Timeline UI Preview")
     try:
@@ -62,11 +64,12 @@ def run_smoke_test(report_path: Path) -> int:
     app.setApplicationName("NE501 Multi Pump Controller")
     app.setOrganizationName("NE501Controller")
     app.setStyle("Fusion")
+    font_family = configure_ui_font(app)
     app.setStyleSheet(build_stylesheet(1.0))
     config = load_config()
-    window = MainWindow(config)
+    isolated_settings = QSettings(str(report_path.parent / "settings.ini"), QSettings.Format.IniFormat)
+    window = MainWindow(config, settings=isolated_settings)
     # The smoke test must not change the real user's saved COM selection.
-    window.settings = QSettings(str(report_path.parent / "settings.ini"), QSettings.Format.IniFormat)
     window.show()
     app.processEvents()
     if sorted(window.panels) != [0, 1, 2, 3]:
@@ -128,6 +131,7 @@ def run_smoke_test(report_path: Path) -> int:
         "pyserial": serial.__version__,
         "simulation_pumps": 4,
         "timeline_preview": True,
+        "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")
     return 0

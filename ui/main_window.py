@@ -36,7 +36,7 @@ _CANCELLED = object()
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, settings: QSettings | None = None) -> None:
         super().__init__()
         self.config = config
         self.addresses = [int(value) for value in config.get("addresses", [0, 1, 2, 3])]
@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self.thread_pool = QThreadPool.globalInstance()
         self.thread_pool.setMaxThreadCount(1)
         self.csv_logger = CsvCommandLogger()
-        self.settings = QSettings("NE501Controller", "NE501 Timeline UI Preview")
+        self.settings = settings if settings is not None else QSettings("NE501Controller", "NE501 Timeline UI Preview")
         self.pending_tasks = 0
         self.task_gate = TaskGate()
         self._panel_pending: dict[int, int] = {}

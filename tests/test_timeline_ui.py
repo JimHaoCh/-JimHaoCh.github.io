@@ -7,8 +7,8 @@ import unittest
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
-    from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
-    from PySide6.QtGui import QMouseEvent, QWheelEvent
+    from PySide6.QtCore import QEvent, QPoint, QPointF, Qt, QSettings
+    from PySide6.QtGui import QMouseEvent, QWheelEvent, QRawFont
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QMessageBox
     from ui.timeline_editor import TimelineEditor
@@ -23,6 +23,8 @@ class TimelineDesktopUITests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+        from ui.fonts import configure_ui_font
+        configure_ui_font(cls.app)
 
     def setUp(self):
         self.ui = TimelineEditor([5, 7, 8, 9])
@@ -256,7 +258,9 @@ class TimelineDesktopUITests(unittest.TestCase):
         from ui.main_window import MainWindow
         from ui.style import build_stylesheet
         previous=self.app.styleSheet()
-        window=MainWindow({'addresses':[0,1,2,3],'port':'MOCK'})
+        settings_dir=tempfile.TemporaryDirectory()
+        isolated_settings=QSettings(str(Path(settings_dir.name)/'settings.ini'),QSettings.Format.IniFormat)
+        window=MainWindow({'addresses':[0,1,2,3],'port':'MOCK'},settings=isolated_settings)
         try:
             for scale in (1,1.3):
                 self.app.setStyleSheet(build_stylesheet(scale))
@@ -275,7 +279,13 @@ class TimelineDesktopUITests(unittest.TestCase):
             self.assertTrue(window.isVisible())
             timeline.saved_snapshot=timeline.model.to_json()
         finally:
-            window.timeline_editor.stop_preview();window.close();self.app.setStyleSheet(previous)
+            window.timeline_editor.stop_preview();window.close();self.app.setStyleSheet(previous);settings_dir.cleanup()
+
+    def test_bundled_font_contains_interface_letters_units_and_chinese(self):
+        raw=QRawFont.fromFont(self.app.font())
+        self.assertTrue(raw.isValid())
+        for char in 'NE5010123456789幫浦推注抽取方向流速設定復原重做µL/min→←▶◀Ⅱ■':
+            self.assertTrue(raw.supportsCharacter(ord(char)),repr(char))
 
 
 if __name__=='__main__':unittest.main()

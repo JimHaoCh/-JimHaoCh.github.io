@@ -58,6 +58,7 @@ $venv = Join-Path (Get-Location) ".build-venv-$Arch"
 Run-Checked $Python @('-m', 'venv', $venv)
 $vp = Join-Path $venv 'Scripts\python.exe'
 Run-Checked $vp @('-m', 'pip', 'install', '--disable-pip-version-check', '-r', 'requirements.txt', '-r', 'requirements-build.txt')
+Run-Checked $vp @('build/fetch_ui_font.py')
 Run-Checked $vp @('-m', 'compileall', '-q', 'main.py', 'ne501', 'ui', 'tests')
 Run-Checked $vp @('-m', 'unittest', 'discover', '-s', 'tests', '-v')
 

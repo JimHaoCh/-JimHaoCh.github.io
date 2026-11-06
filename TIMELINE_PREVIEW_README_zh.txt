@@ -19,3 +19,5 @@ Ctrl+S：儲存；Ctrl+Shift+S：另存；Ctrl+O：開啟。
 時間軌的播放、暫停及狀態屬於模擬，並未傳送幫浦排程命令。0.1 秒是編輯刻度，裝置同步誤差尚待量測。原手動頁仍可連接實際設備，請閱讀安裝包內 DISCLAIMER.txt。
 
 審查項目、驗證及參考來源詳見 UI_REVIEW_2026-11-06.md。操作概念參考 Delft Flow、Kdenlive 與 OpenShot 官方文件；時間軌程式碼獨立撰寫，未複製其程式碼或素材。各公司與幫浦原廠未為本專案提供背書。
+
+字型：內附原版 Noto Sans CJK TC。SIL Open Font License 1.1 與原作者聲明位於 docs/NotoSansCJK；使用者無須另裝字型。

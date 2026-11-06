@@ -29,6 +29,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "..\UI_REVIEW_2026-11-06.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\assets\fonts\OFL.txt"; DestDir: "{app}\docs\NotoSansCJK"; Flags: ignoreversion
+Source: "..\assets\fonts\FONT_NOTICE.txt"; DestDir: "{app}\docs\NotoSansCJK"; Flags: ignoreversion
 Source: "..\builds\arm64\NE501_Multi_Pump_Controller\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: PreferArm64Files
 Source: "..\builds\x64\NE501_Multi_Pump_Controller\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: PreferX64Files
 Source: "..\TIMELINE_PREVIEW_README_zh.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
