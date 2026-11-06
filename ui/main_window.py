@@ -85,13 +85,13 @@ class MainWindow(QMainWindow):
         top_bar = QHBoxLayout()
         top_bar.addWidget(QLabel("Port"))
         top_bar.addWidget(self.port_combo, 1)
-        top_bar.addWidget(QLabel("19200 baud / 8N1"))
+        self.port_combo.setToolTip("Serial connection: 19200 baud / 8N1")
         top_bar.addWidget(self.refresh_button)
         top_bar.addWidget(self.connect_button)
         top_bar.addWidget(self.scan_button)
-        top_bar.addWidget(QLabel("UI size"))
-        top_bar.addWidget(self.ui_scale_combo)
-        top_bar.addWidget(self.connection_label)
+        self.connection_controls = QWidget()
+        self.connection_controls.setLayout(top_bar)
+        top_bar.setContentsMargins(0, 0, 0, 0)
 
         self.workflow_banner = QLabel(
             "WORKFLOW  •  1) SET & VERIFY DIAMETER  →  2) Configure Prime / Steady Flow  →  "
@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
         self.stop_active_button.setObjectName("stopButton")
         self.emergency_button = QPushButton("EMERGENCY STOP ALL")
         self.emergency_button.setObjectName("emergencyButton")
+        self.emergency_button.setToolTip("連線後停止所有實際幫浦；時間軌模擬請使用頁面內的停止。")
 
         group_bar = QHBoxLayout()
         group_bar.addWidget(self.select_all_button)
@@ -174,7 +175,10 @@ class MainWindow(QMainWindow):
         self.timeline_editor = None
         if len(self.addresses) == 4:
             self.timeline_editor = TimelineEditor(self.addresses)
-            self.mode_tabs.addTab(self.timeline_editor, "流程編輯 / Timeline")
+            self.timeline_page = QScrollArea()
+            self.timeline_page.setWidgetResizable(True)
+            self.timeline_page.setWidget(self.timeline_editor)
+            self.mode_tabs.addTab(self.timeline_page, "流程編輯 / Timeline")
             self.mode_tabs.currentChanged.connect(self._mode_changed)
             self.mode_tabs.setCurrentIndex(1)
         else:
@@ -182,11 +186,14 @@ class MainWindow(QMainWindow):
             notice.setWordWrap(True)
             self.mode_tabs.addTab(notice, "流程編輯 / Timeline")
         safety_row = QHBoxLayout()
+        safety_row.addWidget(QLabel("UI size"))
+        safety_row.addWidget(self.ui_scale_combo)
+        safety_row.addWidget(self.connection_label)
         safety_row.addStretch()
         safety_row.addWidget(self.emergency_button)
         central = QWidget()
         layout = QVBoxLayout(central)
-        layout.addLayout(top_bar)
+        layout.addWidget(self.connection_controls)
         layout.addLayout(safety_row)
         layout.addWidget(self.mode_tabs, 1)
         self.setCentralWidget(central)
@@ -209,8 +216,9 @@ class MainWindow(QMainWindow):
         self.append_log("Close WinPumpTerm before connecting to the COM port.")
 
     def _mode_changed(self, index: int) -> None:
-        if self.timeline_editor is not None and index != 1 and self.timeline_editor.busy():
-            self.timeline_editor.stop_preview()
+        self.connection_controls.setVisible(index == 0)
+        if self.timeline_editor is not None and index != 1 and self.timeline_editor.running:
+            self.timeline_editor.pause_preview()
 
     def apply_ui_scale(self) -> None:
         scale = float(self.ui_scale_combo.currentData() or 1.0)
@@ -722,6 +730,9 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.pending_tasks:
             QMessageBox.warning(self, "Operations in progress", "Wait for queued operations to finish before closing.")
+            event.ignore()
+            return
+        if self.timeline_editor is not None and not self.timeline_editor.prepare_to_leave():
             event.ignore()
             return
         if self.controller is None or not self.controller.is_connected:

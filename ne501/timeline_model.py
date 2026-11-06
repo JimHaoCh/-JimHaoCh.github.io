@@ -4,7 +4,7 @@ Times are integer tenths of a second.  This module never connects to pumps.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import math
 from typing import Any
@@ -123,6 +123,19 @@ class Timeline:
         Timeline(total, self.clips, self.addresses)
         self.total = total
 
+    def split(self, clip_id: str, tick: int) -> Clip:
+        """Split a block atomically, preserving rate, direction and total volume."""
+        _integer(tick, 'Split time')
+        clip = self.get(clip_id)
+        if clip is None or not clip.start < tick < clip.end:
+            raise ValueError('分割位置必須位於區塊內部。')
+        left = replace(clip, end=tick)
+        right = replace(clip, id=uuid4().hex, start=tick)
+        candidate = [left if c.id == clip.id else c for c in self.clips] + [right]
+        Timeline(self.total, candidate, self.addresses)
+        self.clips = candidate
+        return right
+
     def make_clip(self, pump: int, requested_start: int = 0, duration: int = 150,
                   direction: str = 'INF', rate: float = 10, unit: str = 'µL/min') -> Clip:
         """Find a gap, keeping the requested duration. Never silently truncate."""
@@ -161,7 +174,7 @@ class Timeline:
             raise ValueError('流程檔超過 1 MB。')
         try:
             d = json.loads(text)
-            if not isinstance(d, dict) or d.get('format') != FORMAT or d.get('version') != 1:
+            if not isinstance(d, dict) or d.get('format') != FORMAT or type(d.get('version')) is not int or d.get('version') != 1:
                 raise ValueError('流程檔格式不正確。')
             total = tick_from_seconds(d['duration'])
             tracks = d['tracks']
@@ -173,11 +186,15 @@ class Timeline:
                 if not isinstance(t, dict) or type(t.get('id')) is not int or t.get('id') != p + 1 or not isinstance(t.get('address'), str) or len(t['address']) != 2 or not t['address'].isascii() or not t['address'].isdigit() or not isinstance(t.get('blocks'), list):
                     raise ValueError('幫浦軌道資料不正確。')
                 addresses.append(int(t['address']))
+                if len(t['blocks']) > 200:
+                    raise ValueError('單一幫浦的區塊超過 200 個。')
                 for b in t['blocks']:
+                    if not isinstance(b, dict):
+                        raise ValueError('區塊資料必須為物件。')
                     clips.append(Clip(b['id'], p, tick_from_seconds(b['start']), tick_from_seconds(b['end']),
                                       b['direction'], b['rate'], b['unit']))
             return cls(total, clips, addresses)
-        except (KeyError, TypeError, json.JSONDecodeError, UnicodeError) as exc:
+        except (KeyError, TypeError, json.JSONDecodeError, UnicodeError, RecursionError) as exc:
             raise ValueError('無法讀取流程檔，請確認格式。') from exc
 
 

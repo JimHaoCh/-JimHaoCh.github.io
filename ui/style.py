@@ -117,6 +117,11 @@ QPushButton#diameterButton:disabled {{
 }}
 QPushButton#applyButton {{ background-color: #2463d3; border-color: #3575e6; color: white; }}
 QPushButton#applyButton:hover {{ background-color: #2f73ee; }}
+QPushButton#applyButton:disabled {{
+    background-color: #24334a;
+    border-color: #3b4a60;
+    color: #8494ab;
+}}
 QPushButton#runButton {{
     background-color: #1f8f4d;
     border-color: #2fb367;
@@ -154,6 +159,11 @@ QPushButton#emergencyButton {{
 }}
 QPushButton#emergencyButton:hover {{ background-color: #cb2a2a; }}
 QPushButton#emergencyButton:pressed {{ background-color: #961d1d; }}
+QPushButton#emergencyButton:disabled {{
+    background-color: #3a2727;
+    border-color: #584040;
+    color: #b39a9a;
+}}
 QComboBox, QDoubleSpinBox, QPlainTextEdit {{
     border: 1px solid #46505f;
     border-radius: {px(7)}px;

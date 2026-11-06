@@ -33,6 +33,13 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-preview-${{ matrix.arch }}
+          path: builds/ui-preview-${{ matrix.arch }}.png
+          if-no-files-found: error
+          retention-days: 30
+
   installer:
     needs: application
     runs-on: windows-2022
@@ -90,6 +97,10 @@ jobs:
         with:
           name: NE501-installer-candidate
           path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-preview-x64
+          path: release
       - name: Create SHA-256 checksum
         shell: pwsh
         run: |
@@ -102,6 +113,7 @@ jobs:
           path: |
             release/NE501_Timeline_UI_Preview_Setup.exe
             release/SHA256.txt
+            release/ui-preview-x64.png
           if-no-files-found: error
           retention-days: 30
 
@@ -123,5 +135,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = 'ne501-timeline-ui-preview-${{ github.run_number }}'
-          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview (Simulation Only)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_Timeline_UI_Preview_Setup.exe' 'release/SHA256.txt' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt'
+          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview v1.1.1 (Simulation Only)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_Timeline_UI_Preview_Setup.exe' 'release/SHA256.txt' 'release/ui-preview-x64.png' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt' 'UI_REVIEW_2026-11-06.md'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed. The verified artifact remains available in this Actions run.' }

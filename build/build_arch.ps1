@@ -98,9 +98,11 @@ try {
     $smoke = Get-Content -Raw $report | ConvertFrom-Json
     if (-not $smoke.ok -or $smoke.python_platform -ne $expected) { throw 'Unexpected GUI smoke test result.' }
     Get-Content -Raw $report | Write-Host
+    Copy-Item (Join-Path $smokeDir 'timeline-preview.png') (Join-Path (Get-Location) "builds\ui-preview-$Arch.png") -Force
 } finally {
     $env:QT_QPA_PLATFORM = $oldQt
     $env:LOCALAPPDATA = $oldLocal
     Remove-Item -Recurse -Force $smokeDir -ErrorAction SilentlyContinue
 }
 Write-Host "Build passed: $exe"
+

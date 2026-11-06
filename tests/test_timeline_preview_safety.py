@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PreviewSafetyTests(unittest.TestCase):
     def test_timeline_modules_do_not_import_pump_or_serial_controllers(self):
-        for name in ('ne501/timeline_model.py', 'ui/timeline_editor.py'):
+        for name in ('ne501/timeline_model.py', 'ui/timeline_editor.py', 'ui/timeline_canvas.py'):
             tree = ast.parse((ROOT / name).read_text(encoding='utf-8'))
             modules = []
             for node in ast.walk(tree):

@@ -61,16 +61,21 @@ def run_smoke_test(report_path: Path) -> int:
     app = QApplication([sys.argv[0]])
     app.setApplicationName("NE501 Multi Pump Controller")
     app.setOrganizationName("NE501Controller")
+    app.setStyle("Fusion")
+    app.setStyleSheet(build_stylesheet(1.0))
     config = load_config()
     window = MainWindow(config)
     # The smoke test must not change the real user's saved COM selection.
     window.settings = QSettings(str(report_path.parent / "settings.ini"), QSettings.Format.IniFormat)
     window.show()
+    app.processEvents()
     if sorted(window.panels) != [0, 1, 2, 3]:
         raise RuntimeError("Expected four default pump panels")
     if window.timeline_editor is None or len(window.timeline_editor.model.addresses) != 4:
         raise RuntimeError("Four-track timeline preview is missing")
     timeline = window.timeline_editor
+    if not window.grab().save(str(report_path.parent / 'timeline-preview.png')):
+        raise RuntimeError('Unable to render timeline preview screenshot')
     timeline.canvas.grab()
     timeline.check_flow()
     if not timeline.play_button.isEnabled():

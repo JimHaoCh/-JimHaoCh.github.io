@@ -60,5 +60,24 @@ class TimelineModelTests(unittest.TestCase):
         self.timeline.set_total(1300)
         self.assertEqual(self.timeline.total, 1300)
 
+    def test_split_is_atomic_and_conserves_volume(self):
+        old = self.timeline.get('a')
+        right = self.timeline.split('a', 100)
+        self.assertEqual((self.timeline.get('a').end, right.start, right.end), (100, 100, 300))
+        self.assertAlmostEqual(self.timeline.get('a').volume_ul + right.volume_ul, old.volume_ul)
+        before = self.timeline.to_json()
+        for tick in (0, 100, 101):
+            with self.assertRaises(ValueError): self.timeline.split('a', tick)
+            self.assertEqual(self.timeline.to_json(), before)
+
+    def test_malformed_json_version_blocks_and_nesting_are_rejected(self):
+        data = json.loads(self.timeline.to_json()); data['version'] = True
+        with self.assertRaises(ValueError): Timeline.from_json(json.dumps(data))
+        data = json.loads(self.timeline.to_json()); data['tracks'][0]['blocks'] = [3]
+        with self.assertRaises(ValueError): Timeline.from_json(json.dumps(data))
+        data = json.loads(self.timeline.to_json()); data['tracks'][0]['blocks'] *= 201
+        with self.assertRaises(ValueError): Timeline.from_json(json.dumps(data))
+        with self.assertRaises(ValueError): Timeline.from_json('['*2000 + '0' + ']'*2000)
+
 
 if __name__ == '__main__': unittest.main()
