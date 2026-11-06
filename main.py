@@ -17,6 +17,7 @@ from ui.style import build_stylesheet
 from ui.fonts import configure_ui_font
 from ui.i18n import manager
 from ne501.mock_controller import MockNE501Controller
+from ne501 import __version__
 
 
 def main() -> int:
@@ -129,6 +130,17 @@ def run_smoke_test(report_path: Path) -> int:
     wait_until(lambda: window.pending_tasks == 0, "simulated STOP ALL")
     if not all(panel.last_status == "S" and panel.last_response_source == "STOP confirmed by pump response" for panel in window.panels.values()):
         raise RuntimeError("Simulated STOP ALL did not confirm every pump")
+    window.mode_tabs.setCurrentIndex(0)
+    window.select_pump(0)
+    panel = window.panels[0]
+    panel.set_diameter_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.confirmed_diameter is not None, 'diameter verification')
+    panel.apply_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.settings_applied, 'fixed-footer apply and read-back')
+    panel.editor_run_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.running, 'fixed-footer start')
+    panel.editor_stop_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'S' and not panel.running, 'fixed-footer stop')
     window.controller.disconnect()
     window.controller = None
     QTimer.singleShot(300, app.quit)
@@ -137,10 +149,12 @@ def run_smoke_test(report_path: Path) -> int:
         raise RuntimeError(f"GUI returned {exit_code}")
     report_path.write_text(json.dumps({
         "ok": True,
+        "version": __version__,
         "python_platform": sysconfig.get_platform(),
         "pyserial": serial.__version__,
         "simulation_pumps": 4,
         "timeline_preview": True,
+        "guided_manual_workflow": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")

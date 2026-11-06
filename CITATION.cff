@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: Please cite this software when it contributes to your research.
 title: NE-501 Multi Pump Controller
 type: software
-version: 1.2.0
+version: 1.3.0
 authors:
   - name: NE-501 Multi Pump Controller contributors
 repository-code: https://github.com/JimHaoCh/-JimHaoCh.github.io/tree/ne501-timeline-ui-preview-20261106

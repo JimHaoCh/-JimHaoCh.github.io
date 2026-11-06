@@ -1,8 +1,8 @@
-# NE-501 Multi Pump Controller — UI Preview v1.2.0
+# NE-501 Multi Pump Controller — UI Preview v1.3.0
 
 Four-pump manual control and a visual timeline editor with global Traditional Chinese / English switching.
 
-本版提供繁體中文／English 即時切換、四台幫浦摘要卡、獨立設定區、群組就緒判斷與狀態回讀。操作語言與控制資料分離，切換語言不會新增設備指令。
+本版提供四步操作提示，以及集中於同一設定區的套用／啟動／停止；群組區列出待處理幫浦、具體原因與導引按鈕。保留繁體中文／English 即時切換、四台幫浦摘要卡、獨立參數與設備狀態回讀。操作語言與控制資料分離。
 
 **手動控制會操作已連線設備；時間軌播放維持模擬。** 0.1 秒為編輯刻度，實機四幫浦同步誤差尚未量測。本專案與原廠無隸屬或背書關係，使用前請閱讀 [DISCLAIMER.txt](DISCLAIMER.txt)。
 
@@ -11,8 +11,9 @@ Four-pump manual control and a visual timeline editor with global Traditional Ch
 - [版本下載](https://github.com/JimHaoCh/-JimHaoCh.github.io/releases)
 - [繁體中文快速說明](TIMELINE_PREVIEW_README_zh.txt)
 - [English quick start](BILINGUAL_UI_QUICK_START_en.txt)
-- [雙語與手動介面設計、驗證範圍](BILINGUAL_MANUAL_UI_v1.2.0.md)
+- [雙語與手動介面設計、驗證範圍](BILINGUAL_MANUAL_UI_v1.3.0.md)
 - [時間軌審查紀錄](UI_REVIEW_2026-11-06.md)
+- [v1.3.0 手動介面變更與驗證](UI_REVIEW_v1.3.0.md)
 - [參考來源](REFERENCES.md)／[引用資料](CITATION.cff)
 
 Windows x64／Windows 11 ARM64 共用安裝程式，使用者無須另裝 Python。預覽版使用與 v1.0.1 分開的安裝位置與設定；此版更新既有 UI Preview。

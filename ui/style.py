@@ -72,6 +72,47 @@ QLabel#offlineStatus, QLabel#warningLabel {{
 QLabel#secondaryLabel {{
     color: #9aa4b2;
 }}
+QLabel#pendingLabel {{ color: #ffd166; }}
+QLabel#workflowStep {{
+    font-size: {pt(8.5)};
+    padding: {px(4)}px;
+    border-radius: {px(5)}px;
+    background-color: #2b3340;
+    color: #9aa4b2;
+    border: 1px solid #46505f;
+}}
+QLabel#workflowStep[state="current"] {{
+    color: #ffe6a0;
+    border: 1px solid #d59a2f;
+    background-color: #483b24;
+    font-weight: 700;
+}}
+QLabel#workflowStep[state="complete"] {{
+    color: #8ce2ad;
+    border-color: #2f7851;
+    background-color: #213d2d;
+}}
+QLabel#nextStepBanner {{
+    background-color: #293548;
+    color: #e5efff;
+    border-left: 3px solid #ffd166;
+    padding: {px(6)}px;
+    font-size: {pt(9.5)};
+}}
+QLabel#deliverySummary {{
+    background-color: #26313f;
+    border-radius: {px(5)}px;
+    padding: {px(6)}px;
+    font-size: {pt(9.5)};
+}}
+QWidget#pumpActionBar {{
+    background-color: #26313f;
+    border: 1px solid #46546a;
+    border-radius: {px(7)}px;
+}}
+QWidget#pumpActionBar QLabel {{ font-size: {pt(9.0)}; }}
+QWidget#pumpActionBar QLabel#actionTarget {{ font-weight: 700; }}
+QDoubleSpinBox[invalid="true"] {{ border: 2px solid #ff7b72; }}
 QLabel#workflowBanner {{
     background-color: #253752;
     color: #d9e8ff;

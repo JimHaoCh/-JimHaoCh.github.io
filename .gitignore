@@ -9,3 +9,4 @@ release/
 *.log
 assets/fonts/*.otf
 assets/fonts/*.part
+assets/translations/*.qm

@@ -1,10 +1,11 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Callable, Optional
-from PySide6.QtCore import QSettings, QThreadPool, Qt, QTimer, QSignalBlocker
+from PySide6.QtCore import QEvent, QSettings, QThreadPool, Qt, QTimer, QSignalBlocker
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QApplication, QGridLayout, QHBoxLayout, QMainWindow, QScrollArea, QSplitter, QVBoxLayout, QWidget, QStackedWidget, QTabWidget
+from PySide6.QtWidgets import QApplication, QGridLayout, QHBoxLayout, QMainWindow, QScrollArea, QSizePolicy, QSplitter, QVBoxLayout, QWidget, QStackedWidget, QTabWidget
 from ne501.controller import NE501Controller, ProgramSettings
+from ne501 import __version__
 from ne501.logging_utils import CsvCommandLogger
 from ne501.mock_controller import MockNE501Controller
 from ne501.protocol import PumpResponse
@@ -46,8 +47,9 @@ class MainWindow(QMainWindow):
         common.addWidget(QLabel('UI size'));common.addWidget(self.ui_scale_combo);common.addWidget(self.connection_label);common.addStretch();common.addWidget(self.emergency_button)
 
         self.port_combo=QComboBox();self.port_combo.setToolTip('Serial connection: 19200 baud / 8N1')
-        self.refresh_button=QPushButton('Refresh COM');self.connect_button=QPushButton('Connect');self.connect_button.setObjectName('connectButton')
-        self.scan_button=QPushButton('Scan Pumps');self.refresh_status_button=QPushButton('Refresh status')
+        self.refresh_button=QPushButton('Refresh COM');self.connect_button=QPushButton('Connect and detect');self.connect_button.setObjectName('connectButton')
+        self.connect_button.setToolTip('Connect to the selected port and automatically detect configured pumps.')
+        self.scan_button=QPushButton('Rescan pumps');self.refresh_status_button=QPushButton('Refresh status')
         self.auto_refresh_checkbox=QCheckBox('Auto refresh (2 s)')
         top=QHBoxLayout();top.setContentsMargins(0,0,0,0);top.addWidget(QLabel('Port'));top.addWidget(self.port_combo,1)
         for button in (self.refresh_button,self.connect_button,self.scan_button,self.refresh_status_button):top.addWidget(button)
@@ -62,23 +64,30 @@ class MainWindow(QMainWindow):
             panel.set_diameter_requested.connect(self.set_diameter);panel.apply_requested.connect(self.apply_single)
             panel.run_requested.connect(self.run_single);panel.stop_requested.connect(self.stop_single)
             panel.edit_requested.connect(self.select_pump);panel.state_changed.connect(self.refresh_group_controls)
-        dashboard=QWidget();dashboard.setLayout(panel_grid);dashboard.setMinimumWidth(500)
+        dashboard=QWidget();dashboard_layout=QVBoxLayout(dashboard);dashboard_layout.setContentsMargins(0,0,0,0);dashboard_layout.addLayout(panel_grid);dashboard_layout.addStretch();dashboard.setMinimumWidth(500)
         self.panel_scroll=QScrollArea();self.panel_scroll.setWidgetResizable(True);self.panel_scroll.setWidget(dashboard)
+        self.panel_scroll.viewport().installEventFilter(self)
         self.editor_scroll=QScrollArea();self.editor_scroll.setWidgetResizable(True);self.editor_scroll.setWidget(self.editor_stack)
-        self.editor_scroll.setMinimumWidth(290);self.editor_scroll.setMaximumWidth(390)
+        self.editor_scroll.setMinimumWidth(350)
         self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.editor_container=QWidget();right=QVBoxLayout(self.editor_container);right.setContentsMargins(0,0,0,0);right.setSpacing(3);right.addWidget(self.editor_scroll,1);right.addWidget(self.action_stack)
-        self.editor_container.setMinimumWidth(290);self.editor_container.setMaximumWidth(390)
+        self.editor_container.setMinimumWidth(350);self.editor_container.setMaximumWidth(680)
         self.manual_splitter=QSplitter(Qt.Orientation.Horizontal);self.manual_splitter.addWidget(self.panel_scroll);self.manual_splitter.addWidget(self.editor_container)
-        self.manual_splitter.setStretchFactor(0,1);self.manual_splitter.setStretchFactor(1,0);self.manual_splitter.setSizes([870,330])
+        self.manual_splitter.setStretchFactor(0,1);self.manual_splitter.setStretchFactor(1,1);self.manual_splitter.setSizes([740,500])
         self.select_all_button=QPushButton('Select available');self.select_all_button.setToolTip('Only online pumps with a verified diameter are included.');self.clear_active_button=QPushButton('Clear selection')
         self.apply_active_button=QPushButton('Apply selected');self.apply_active_button.setObjectName('applyButton')
         self.run_active_button=QPushButton('Start selected');self.run_active_button.setObjectName('runButton')
         self.stop_active_button=QPushButton('Stop selected');self.stop_active_button.setObjectName('stopButton')
         self.group_label=QLabel();self.group_label.setWordWrap(True)
+        self.group_label.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
         self.group_guide=QLabel();self.group_guide.setWordWrap(True);self.group_guide.setObjectName('secondaryLabel')
+        self.group_guide.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        self.group_fix_button=QPushButton('Resolve');self.group_fix_button.setObjectName('secondaryButton')
+        self.group_fix_button.clicked.connect(self.resolve_group_blocker)
+        self._first_group_blocker=None
         selection=QHBoxLayout();selection.addWidget(self.select_all_button);selection.addWidget(self.clear_active_button);selection.addWidget(self.group_label,1);selection.addWidget(self.auto_refresh_checkbox)
         actions=QHBoxLayout();actions.addWidget(self.group_guide,1)
+        actions.addWidget(self.group_fix_button)
         for button in (self.apply_active_button,self.run_active_button,self.stop_active_button):actions.addWidget(button)
         self.log_view=QPlainTextEdit();self.log_view.setReadOnly(True);self.log_view.setMaximumBlockCount(3000)
         self.log_view.setPlaceholderText('Command / response log');self.log_view.setMaximumHeight(140);self.log_view.hide()
@@ -115,7 +124,7 @@ class MainWindow(QMainWindow):
     def change_language(self,*_):
         language=str(self.language_combo.currentData());self.settings.setValue('language',language);manager.set_language(language)
     def retranslate(self):
-        self.setWindowTitle(tr('NE-501 Pump Controller • UI Preview')+' v1.2.0')
+        self.setWindowTitle(tr('NE-501 Pump Controller • UI Preview')+' v'+__version__)
         self.mode_tabs.setTabText(0,tr('Manual Control'));self.mode_tabs.setTabText(1,tr('Timeline Editor'))
         blocker=QSignalBlocker(self.language_combo);self.language_combo.setCurrentIndex(self.language_combo.findData(manager.language));del blocker
         if self.timeline_editor is not None:self.timeline_editor.canvas.update()
@@ -123,20 +132,41 @@ class MainWindow(QMainWindow):
     def _mode_changed(self,index):
         self.connection_controls.setVisible(index==0)
         if self.timeline_editor is not None and index!=1 and self.timeline_editor.running:self.timeline_editor.pause_preview()
+        QTimer.singleShot(0,self.update_dashboard_density)
+
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        if hasattr(self,'panel_scroll'):QTimer.singleShot(0,self.update_dashboard_density)
+
+    def eventFilter(self,watched,event):
+        if hasattr(self,'panel_scroll') and watched is self.panel_scroll.viewport() and event.type()==QEvent.Type.Resize:
+            self.update_dashboard_density(event.size().height(),event.size().width())
+        return super().eventFilter(watched,event)
+
+    def update_dashboard_density(self,height=None,width=None):
+        height=self.panel_scroll.viewport().height() if height is None else height
+        width=self.panel_scroll.viewport().width() if width is None else width
+        compact=height<520 or width<600
+        for panel in self.panels.values():panel.set_compact(compact)
     def select_pump(self,address):
         self.selected_address=address;self.editor_stack.setCurrentWidget(self.panels[address].editor);self.action_stack.setCurrentWidget(self.panels[address].action_bar)
         self.editor_scroll.verticalScrollBar().setValue(0)
         for key,panel in self.panels.items():panel.set_selected(key==address)
+        self.refresh_group_controls()
     def apply_ui_scale(self,*_):
         scale=float(self.ui_scale_combo.currentData() or 1.)
         self.settings.setValue('ui_scale',scale);QApplication.instance().setStyleSheet(build_stylesheet(scale));self.updateGeometry()
+        QTimer.singleShot(0,self.update_dashboard_density)
     def refresh_group_controls(self,*_):
         if not hasattr(self,'group_label'):return
         connected=self.controller is not None and self.controller.is_connected
-        self.workflow_banner.setText('Manual simulation: commands use simulated pumps only.' if isinstance(self.controller,MockNE501Controller) else 'Manual control: commands operate connected pumps.')
+        selected=self.panels.get(getattr(self,'selected_address',self.addresses[0]))
+        if selected is not None:
+            mode='Simulation' if isinstance(self.controller,MockNE501Controller) else 'Connected pumps' if connected else 'Manual setup'
+            self.workflow_banner.setText(f'{mode} | Pump {selected.index} | Address {selected.address:02d} | '+selected.next_instruction())
         panels=self.active_panels()
-        can_apply=connected and bool(panels) and all(p.online and p.last_status not in (None,'A') and p.confirmed_diameter is not None and not p.busy and not p.running for p in panels)
-        can_run=can_apply and all(p.settings_applied for p in panels)
+        can_apply=connected and bool(panels) and all(not p.configuration_blocker() for p in panels)
+        can_run=connected and bool(panels) and all(not p.start_blocker() for p in panels)
         self.apply_active_button.setEnabled(can_apply);self.run_active_button.setEnabled(can_run)
         self.stop_active_button.setEnabled(connected and bool(panels))
         self.clear_active_button.setEnabled(bool(panels))
@@ -149,9 +179,36 @@ class MainWindow(QMainWindow):
         self.refresh_status_button.setEnabled(connected and not self.pending_tasks)
         self.auto_refresh_checkbox.setEnabled(connected)
         addresses=', '.join(f'{p.address:02d}' for p in panels) or '—'
-        self.group_label.setText(f'{len(panels)} selected | Addresses: {addresses}')
-        bad=[f'{p.address:02d}' for p in panels if not (p.online and p.confirmed_diameter is not None and not p.busy and not p.running and p.settings_applied)]
-        self.group_guide.setText('Select pumps for group actions.' if not panels else f'Needs attention: {", ".join(bad)}' if bad else 'Ready for group actions.')
+        count=len(panels);ready_count=sum(not p.start_blocker() for p in panels)
+        self.group_label.setText(f'{count} selected | Ready: {ready_count}/{count} | Addresses: {addresses}' if panels else 'Group: no pumps selected')
+        blockers=[(p,p.start_blocker()) for p in panels if p.start_blocker()]
+        self._first_group_blocker=blockers[0][0].address if blockers else None
+        details=[f'Pump {p.index} (address {p.address:02d}): {reason}' for p,reason in blockers]
+        self.group_guide.setText('Select pumps for group actions.' if not panels else details[0] if blockers else 'Ready for group actions.')
+        self.group_guide.setToolTip('\n'.join(details))
+        self.group_fix_button.setVisible(bool(blockers))
+        self.group_fix_button.setEnabled(connected and not self.pending_tasks)
+        if details:self.group_fix_button.setToolTip(details[0])
+        self.apply_active_button.setText(f'Apply selected ({count})')
+        self.run_active_button.setText(f'Start selected ({count})')
+        self.stop_active_button.setText(f'Stop selected ({count})')
+        self.apply_active_button.setStyleSheet('border: 2px solid #ffd166;' if can_apply and not can_run else '')
+        self.run_active_button.setStyleSheet('border: 2px solid #ffd166;' if can_run else '')
+
+    def resolve_group_blocker(self):
+        address=self._first_group_blocker
+        if address is None:return
+        self.select_pump(address)
+        panel=self.panels[address]
+        if not panel.online:
+            self.scan_button.setFocus()
+            return
+        if panel.last_status is None:
+            self.refresh_status_button.setFocus()
+            return
+        target=panel.focus_next_step()
+        if panel.editor.isAncestorOf(target):
+            QTimer.singleShot(0,lambda:self.editor_scroll.ensureWidgetVisible(target,12,12))
     def _set_group_buttons_enabled(self,enabled):
         for panel in self.panels.values():panel.set_connection_available(enabled)
         self.refresh_group_controls()
@@ -262,7 +319,7 @@ class MainWindow(QMainWindow):
             self.connection_label.setObjectName("offlineStatus")
             self.connection_label.style().unpolish(self.connection_label)
             self.connection_label.style().polish(self.connection_label)
-            self.connect_button.setText("Connect")
+            self.connect_button.setText("Connect and detect")
             self.port_combo.setEnabled(True)
             self.refresh_button.setEnabled(True)
             self.scan_button.setEnabled(False)
@@ -419,7 +476,14 @@ class MainWindow(QMainWindow):
         if not panels:return
         for panel in panels:
             if not self.require_panel_ready(panel,False):return
-        try:plan=[(p,self.build_program_settings(p,p.current_settings())) for p in panels]
+        try:
+            plan=[]
+            for panel in panels:
+                settings=panel.validated_settings()
+                if settings is None:
+                    self.select_pump(panel.address)
+                    return
+                plan.append((panel,self.build_program_settings(panel,settings)))
         except ValueError as exc:QMessageBox.warning(self,'Invalid Settings',str(exc));return
         ticket=self.task_gate.ordinary_ticket()
         generations={p.address:self._pump_generation.get(p.address,0) for p in panels}

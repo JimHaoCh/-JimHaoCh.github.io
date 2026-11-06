@@ -1,3 +1,5 @@
+> v1.3.0 介面操作請先參閱 BILINGUAL_MANUAL_UI_v1.3.0.md 與 QUICK_START_Traditional_Chinese.txt。以下保留早期版本的控制功能與通訊參考。
+
 # NE-501 Multi Pump Controller v1.0.0
 ## 繁體中文操作說明書
 

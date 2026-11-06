@@ -281,6 +281,46 @@ CATALOG.extend([
 ('Low','低'),('High','高'),('Medium','中'),('Max','最高'),('Min','最低'),
 ])
 
+CATALOG.extend([
+('Connect and detect','連線並偵測'),('Rescan pumps','重新偵測幫浦'),
+('Connect to the selected port and automatically detect configured pumps.','連接所選連接埠，並自動偵測各台幫浦。'),
+('Simulation','模擬操作'),('Connected pumps','實體幫浦操作'),('Manual setup','手動操作準備'),
+('Address {raw0}','位址 {raw0}'),
+('Pump {raw0} settings | Address {raw1}','正在設定幫浦 {raw0}｜位址 {raw1}'),
+('1 Diameter','1 內徑'),('2 Delivery','2 輸送'),('3 Verify','3 回讀'),('4 Start','4 啟動'),
+('Verify diameter','確認內徑'),('Change','修改'),
+('Enter the actual syringe inside diameter in millimetres.','輸入實際針筒內徑，單位為 mm。'),
+('Main target volume','正式輸送體積'),('Show device response','顯示設備回應'),
+('3 Apply and verify','3 套用並回讀'),('4 Start pump {raw0}','4 啟動幫浦 {raw0}'),
+('Stop this pump','停止此幫浦'),('● Running','● 運轉中'),('Ready to start','設定已確認，準備啟動'),
+('Enter a complete inside diameter between 0.10 and 50.00 mm.','請輸入完整的針筒內徑，範圍為 0.10–50.00 mm。'),
+('Enter a complete main flow rate greater than zero.','請輸入完整且大於零的正式輸送流速。'),
+('Enter a complete main target volume greater than zero.','請輸入完整且大於零的正式輸送體積。'),
+('Enter a complete Prime volume greater than zero.','請輸入完整且大於零的前置輸送體積。'),
+('Group selection cleared: verify the diameter and select this pump again.','群組勾選已取消：請重新確認內徑，再勾選此幫浦。'),
+('Verify diameter to enable group selection.','完成內徑確認後，即開放群組勾選。'),
+('Refresh device status first','請先更新設備狀態'),
+('Stop this pump before changing settings.','請先停止此幫浦，再修改設定。'),
+('Next: select a COM port, then Connect and detect.','下一步：選擇 COM 埠，按「連線並偵測」。'),
+('Next: check the connection, then Rescan pumps.','下一步：檢查連接後，按「重新偵測幫浦」。'),
+('Waiting for the current operation to finish.','正在等候目前操作完成。'),
+('Next: Refresh status to confirm device state.','下一步：按「更新狀態」，確認設備回報。'),
+('Running. Use Stop this pump to finish.','運轉中；結束時請按「停止此幫浦」。'),
+('Next: enter the actual inside diameter, then Verify diameter.','下一步：輸入實際針筒內徑，再按「確認內徑」。'),
+('Next: complete the highlighted delivery fields.','下一步：完成標示的輸送欄位。'),
+('Next: review delivery settings, then Apply and verify.','下一步：確認輸送設定，再按「3 套用並回讀」。'),
+('Next: Start pump {raw0}. Settings are verified.','設定已確認；下一步：按「4 啟動幫浦 {raw0}」。'),
+('Last checked: {raw0} ({raw1} s ago)','上次設備回報：{raw0}（{raw1} 秒前）'),
+('Prime: {raw0} {raw1} → {msg0}','前置輸送 {raw0} {raw1} → {msg0}'),
+('Resolve','前往處理'),('Ready: {raw0}/{raw1}','就緒 {raw0}/{raw1}'),
+('Pump {raw0} (address {raw1}): {msg0}','幫浦 {raw0}（位址 {raw1}）：{msg0}'),
+('Apply selected ({raw0})','套用所選（{raw0} 台）'),
+('Start selected ({raw0})','啟動所選（{raw0} 台）'),
+('Stop selected ({raw0})','停止所選（{raw0} 台）'),
+('{raw0} selected | Ready: {raw1}/{raw2} | Addresses: {raw3}','已勾選 {raw0} 台｜就緒 {raw1}/{raw2}｜位址：{raw3}'),
+('Group: no pumps selected','群組：尚未勾選幫浦'),
+])
+
 _exact = {}
 _patterns = []
 def _pattern(template):

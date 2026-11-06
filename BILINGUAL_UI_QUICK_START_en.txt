@@ -1,22 +1,21 @@
-NE-501 Pump Controller UI Preview v1.2.0
+NE-501 Pump Controller UI Preview v1.3.0
 
-Use the global Language menu to select English or Traditional Chinese. The choice is remembered. Changing language preserves connection and editing state and does not send pump commands.
+Single-pump workflow
+1. Select the COM port and click Connect and detect. Detection runs automatically after connection. Rescan pumps checks the connections again.
+2. Click Edit on a pump card. The settings heading and fixed action footer identify the pump and its actual address.
+3. Enter the actual syringe inside diameter and click Verify diameter. A verified diameter collapses to one line; use Change to edit it. A diameter change invalidates verification and clears that pump's group selection with a visible explanation.
+4. Set direction, main rate and unit, and Continuous or Target volume. The target volume applies to the main delivery phase.
+5. Enable Prime before delivery if needed. Choose one of the five levels and a Prime volume. Prime uses the selected direction and switches to the main rate afterward.
+6. Click 3 Apply and verify in the fixed settings footer. Incomplete active fields show an inline explanation. Start stays disabled until device verification succeeds.
+7. Click 4 Start pump in the same footer. Stop this pump is always in that footer; each card also retains its Start/Stop shortcuts. Stop all pumps stays at the top right. Check the device response to confirm stopping.
 
-Manual Control:
-- Select a COM port, connect, and scan pumps.
-- Each card shows the logical pump number and actual network address.
-- Edit selects a pump for the independent inspector. Group checkboxes select pumps for group actions.
-- Verify the syringe inside diameter, enter delivery direction/rate and Continuous or Target volume mode, then Apply and verify.
-- Optional Prime uses the selected direction and volume before switching to the main rate. Its percentages refer to the diameter-dependent pump maximum.
-- Start is enabled only after the setup is verified. Stop does not depend on setup readiness.
-- Stop cancels old queued operations for that channel. Confirm the device response before assuming motion stopped.
-- Refresh status queries the devices. Optional automatic refresh is off by default; it checks every 2 seconds and skips busy/modal periods.
-- Raw device commands, responses and CSV logs retain their original format.
+Group controls
+Group becomes available after each pump's diameter is verified. Editing a pump and selecting it for group actions are separate choices. The group summary shows selection, readiness and addresses. A blocker identifies the pump and the required action. Resolve navigates to the relevant settings or status control without sending device commands.
+Apply selected, Start selected and Stop selected show their target count. All selected pumps must be verified before group start. Each pump uses its own settings. Existing queued-command cancellation and stop confirmation remain in use.
 
-Timeline Editor:
-Drag clips to move them or trim their edges. Double-click a gap to insert. Use snapping, Ctrl+wheel zoom, F to focus, Ctrl+B to split and Ctrl+Z/Ctrl+Y to undo/redo.
-Check the workflow before playback. Playback remains simulation only. The 0.1 s editing grid is separate from unmeasured hardware synchronization.
+Display and status
+The four-step strip follows Diameter, Delivery, Verify and Start. Yellow outlines mark the current required action. The right settings area starts at about 500 px and the divider is draggable. Compact cards keep individual Stop controls visible at smaller window heights. Hover a compact card for its delivery mode and last device-report time.
+Last checked time is information; an unknown device state, alarm, changed diameter or unapplied setting has its own instruction. Auto refresh is optional and starts off. Busy communications skip its 2-second trigger.
+Language changes preserve values, drafts, connection and selection, and send no pump commands. Diagnostic TX/RX and CSV records retain device data.
 
-This installer supports Windows x64 and ARM64 without a separate Python installation.
-It updates the UI preview and uses a separate installation/configuration from v1.0.1.
-Read DISCLAIMER.txt and the included third-party notices before controlling equipment.
+Manual control sends commands to connected pumps. Timeline playback remains simulation only. Real pump flow, timing and synchronization require hardware validation. See DISCLAIMER.txt and BILINGUAL_MANUAL_UI_v1.3.0.md.

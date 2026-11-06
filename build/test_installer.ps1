@@ -13,6 +13,8 @@ $setup = Start-Process -FilePath $installer -ArgumentList $args -Wait -PassThru
 if ($setup.ExitCode -ne 0) { throw "Installer returned $($setup.ExitCode)." }
 $exe = Join-Path $target 'NE501_Multi_Pump_Controller.exe'
 if (-not (Test-Path $exe)) { throw 'Installed executable is missing.' }
+$expectedVersion = (Get-Content -Raw (Join-Path $PSScriptRoot '..\VERSION')).Trim()
+if ((Get-Item $exe).VersionInfo.FileVersion -ne $expectedVersion) { throw 'Installed executable version does not match VERSION.' }
 
 # Verify the PE machine field, independent of the host process architecture.
 $reader = New-Object System.IO.BinaryReader([System.IO.File]::OpenRead($exe))
@@ -38,6 +40,7 @@ try {
     if ($proc.ExitCode -ne 0 -or -not (Test-Path $report)) { throw 'Installed application smoke test failed.' }
     $smoke = Get-Content -Raw $report | ConvertFrom-Json
     if (-not $smoke.ok -or $smoke.python_platform -ne $expectedPlatform) { throw 'Wrong installed application architecture.' }
+    if ($smoke.version -ne $expectedVersion -or -not $smoke.guided_manual_workflow) { throw 'Installed version or guided manual workflow check failed.' }
     $config = Join-Path $userData 'NE501_Timeline_UI_Preview\config.json'
     if (-not (Test-Path $config)) { throw 'User config was not created.' }
     $uninstaller = Join-Path $target 'unins000.exe'

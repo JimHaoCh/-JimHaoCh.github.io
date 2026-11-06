@@ -119,6 +119,9 @@ class BilingualManualTests(unittest.TestCase):
         self.ready_mock()
         for address in (0,1,3):
             self.win.panels[address].confirm_diameter(10);self.win.panels[address].mark_settings_applied()
+            panel=self.win.panels[address]
+            confirmation=self.win.controller.configure_program(address,self.win.build_program_settings(panel,panel.current_settings()))
+            panel.set_program_confirmation(confirmation)
         self.win.panels[1].update_from_status('I')
         self.win.panels[3].continuous_checkbox.setChecked(False);self.win.panels[3].direction_combo.setCurrentIndex(1)
         self.win.panels[3].mark_settings_applied()
@@ -127,7 +130,7 @@ class BilingualManualTests(unittest.TestCase):
             for scale in (1.,1.3):
                 self.win.ui_scale_combo.setCurrentIndex(self.win.ui_scale_combo.findData(scale))
                 self.app.setStyleSheet(build_stylesheet(scale))
-                for width,height in ((1280,850),(1024,768)):
+                for width,height in ((1280,850),(1024,768),(1366,768),(1920,1080)):
                     for index,name in ((0,'manual'),(1,'timeline')):
                         self.win.mode_tabs.setCurrentIndex(index);self.win.resize(width,height);self.app.processEvents()
                         filename=shots/f'{name}-{language}-{width}-{round(scale*100)}.png'
@@ -143,10 +146,13 @@ class BilingualManualTests(unittest.TestCase):
                             viewport=self.win.editor_scroll.viewport()
                             panel=self.win.panels[self.win.selected_address]
                             for field in (panel.diameter_input,panel.set_diameter_button,panel.rate_unit_combo,panel.direction_combo,panel.mode_combo):
+                                if not field.isVisible():continue
                                 point=field.mapTo(viewport,QPoint(0,0))
                                 if point.x()<0 or point.x()+field.width()>viewport.width():problems.append((filename.name,'inspector width',point.toTuple(),field.size().toTuple(),viewport.size().toTuple()))
-                            point=panel.apply_button.mapTo(self.win,QPoint(0,0))
-                            if point.y()+panel.apply_button.height()>self.win.height():problems.append((filename.name,'apply footer',point.toTuple()))
+                            for button in (panel.apply_button,panel.editor_run_button,panel.editor_stop_button):
+                                point=button.mapTo(self.win,QPoint(0,0))
+                                if point.x()<0 or point.x()+button.width()>self.win.width() or point.y()+button.height()>self.win.height():
+                                    problems.append((filename.name,'action footer',point.toTuple(),button.size().toTuple()))
         self.assertFalse(problems,problems)
 
     def test_group_apply_reports_successes_when_one_pump_fails(self):
@@ -204,6 +210,7 @@ class BilingualManualTests(unittest.TestCase):
         panel.update_from_status(None)
         self.assertFalse(panel.settings_applied);self.assertFalse(panel.run_button.isEnabled())
         self.assertTrue(panel.stop_button.isEnabled())
+        self.assertEqual(panel.status_label.source_text,'● STATUS UNCONFIRMED')
 
     def test_language_preference_is_restored_by_a_new_window(self):
         self.win.language_combo.setCurrentIndex(self.win.language_combo.findData('en'))
@@ -235,3 +242,71 @@ class BilingualManualTests(unittest.TestCase):
         finally:
             for ticket in tickets:
                 if ticket is not None:self.win.task_gate.end_stop(ticket)
+
+    def test_fixed_editor_actions_complete_the_single_pump_workflow(self):
+        self.ready_mock();self.win.mode_tabs.setCurrentIndex(0)
+        panel=self.win.panels[1];self.win.select_pump(1)
+        self.assertFalse(panel.editor_run_button.isEnabled())
+        panel.set_diameter_button.click();self.wait_idle()
+        self.assertIsNotNone(panel.confirmed_diameter)
+        self.assertFalse(panel.diameter_fields.isVisible())
+        self.assertFalse(panel.editor_run_button.isEnabled())
+        self.assertIn('Apply and verify',panel.step_banner.source_text)
+        panel.apply_button.click();self.wait_idle()
+        self.assertTrue(panel.editor_run_button.isEnabled())
+        self.assertIn('Start pump 2',panel.step_banner.source_text)
+        self.assertFalse(panel.is_active())
+        panel.editor_run_button.click();self.wait_idle()
+        self.assertTrue(panel.running)
+        self.assertFalse(panel.editor_run_button.isEnabled())
+        self.assertFalse(self.win.panels[0].running)
+        panel.editor_stop_button.click();self.wait_idle()
+        self.assertFalse(panel.running);self.assertEqual(panel.last_status,'S')
+
+    def test_group_resolve_identifies_the_blocking_pump_without_sending_commands(self):
+        self.ready_mock();self.win.mode_tabs.setCurrentIndex(0)
+        for address in (0,1):
+            panel=self.win.panels[address];panel.confirm_diameter(10);panel.set_active(True)
+        self.win.panels[1].mark_settings_applied();self.win.select_pump(1)
+        self.assertIn('Pump 1 (address 00): Apply settings first',self.win.group_guide.source_text)
+        self.assertFalse(self.win.run_active_button.isEnabled())
+        with patch.object(self.win.controller,'send_command',wraps=self.win.controller.send_command) as commands:
+            self.win.group_fix_button.click();self.app.processEvents()
+            self.assertEqual(self.win.selected_address,0)
+            self.assertTrue(self.win.panels[0].is_active());self.assertTrue(self.win.panels[1].is_active())
+            commands.assert_not_called()
+
+    def test_partial_numeric_input_blocks_both_start_paths_and_explains_the_field(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        self.ready_mock();self.win.mode_tabs.setCurrentIndex(0)
+        panel=self.win.panels[0];panel.confirm_diameter(10);panel.mark_settings_applied();panel.set_active(True)
+        panel.rate_input.setFocus();panel.rate_input.selectAll()
+        QTest.keyClick(panel.rate_input,Qt.Key.Key_Backspace);self.app.processEvents()
+        self.assertFalse(panel.rate_input.hasAcceptableInput())
+        self.assertTrue(panel.validation_label.isVisible())
+        self.assertIn('main flow rate',panel.validation_label.source_text)
+        self.assertFalse(panel.editor_run_button.isEnabled());self.assertFalse(self.win.run_active_button.isEnabled())
+        self.assertFalse(self.win.apply_active_button.isEnabled())
+        QTest.keyClicks(panel.rate_input,'12.3');self.app.processEvents()
+        self.win.apply_active();self.wait_idle()
+        self.assertTrue(panel.settings_applied);self.assertEqual(panel.applied_snapshot.rate,12.3)
+
+    def test_diameter_edit_explains_cleared_group_and_requires_verification(self):
+        self.ready_mock();panel=self.win.panels[0]
+        panel.confirm_diameter(10);panel.mark_settings_applied();panel.set_active(True)
+        panel.open_diameter_editor();panel.diameter_input.setValue(12)
+        self.assertFalse(panel.is_active());self.assertFalse(panel.editor_run_button.isEnabled())
+        self.assertIn('Group selection cleared',panel.group_hint_label.source_text)
+        panel.confirm_diameter(12)
+        self.assertFalse(panel.settings_applied);self.assertFalse(panel.is_active())
+        self.assertIn('Group selection cleared',panel.group_hint_label.source_text)
+        panel.set_active(True);self.assertEqual(panel.group_hint_label.source_text,'')
+
+    def test_status_age_is_information_and_does_not_reset_verified_settings(self):
+        self.ready_mock();panel=self.win.panels[0]
+        panel.confirm_diameter(10);panel.mark_settings_applied()
+        panel.checked_at=time.monotonic()-20;panel.refresh_age()
+        self.assertIn('s ago',panel.last_check_label.source_text)
+        self.assertNotIn('needs refresh',panel.last_check_label.source_text)
+        self.assertTrue(panel.settings_applied);self.assertTrue(panel.editor_run_button.isEnabled())
