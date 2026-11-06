@@ -1,4 +1,4 @@
-NE-501 Pump Controller UI Preview v1.3.0
+NE-501 Pump Controller UI Preview v1.3.1
 
 Single-pump workflow
 1. Select the COM port and click Connect and detect. Detection runs automatically after connection. Rescan pumps checks the connections again.
@@ -18,4 +18,9 @@ The four-step strip follows Diameter, Delivery, Verify and Start. Yellow outline
 Last checked time is information; an unknown device state, alarm, changed diameter or unapplied setting has its own instruction. Auto refresh is optional and starts off. Busy communications skip its 2-second trigger.
 Language changes preserve values, drafts, connection and selection, and send no pump commands. Diagnostic TX/RX and CSV records retain device data.
 
-Manual control sends commands to connected pumps. Timeline playback remains simulation only. Real pump flow, timing and synchronization require hardware validation. See DISCLAIMER.txt and BILINGUAL_MANUAL_UI_v1.3.0.md.
+Manual control sends commands to connected pumps. Timeline playback remains simulation only. Real pump flow, timing and synchronization require hardware validation. See DISCLAIMER.txt and BILINGUAL_MANUAL_UI_v1.3.1.md.
+
+v1.3.1 timeline syringe setup
+Use Syringes to configure the actual inside diameters for all used pumps. Manual verified read-backs can be copied explicitly into the plan. The inspector shows planned/device diameter, plunger speed and the representable device rate. Changes invalidate the flow check and are saved with the workflow. Legacy workflows require the missing diameters to be supplied; the example explicitly uses 10 mm example diameters.
+Flow is volumetric. Plunger speed equals flow in microlitres/min divided by syringe area in square millimetres. Preflight checks numeric representability and the manufacturer's mechanical range. Timeline playback remains simulation; the planning dialog sends no device commands.
+The update fixes four-digit integer zero truncation, loose read-back tolerances, diameter precision, same-file reload after Save, extreme numeric input, CSV filename collisions and invalid-address truncation. See SOURCE_AUDIT_v1.3.1.md.

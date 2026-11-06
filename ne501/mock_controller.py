@@ -5,10 +5,12 @@ import time
 from typing import Iterable, Optional
 
 from .controller import (
+    NE501Controller,
     DiameterConfirmation, ProgramConfirmation, ProgramSettings,
     PumpConnectionError, choose_program_volume_unit, convert_rate,
     format_pump_number, maximum_rate_ml_hr, normalize_rate, prime_rate_ml_hr,
 )
+from .syringe import format_diameter
 from .protocol import PumpResponse, first_float, parse_response
 
 
@@ -31,7 +33,7 @@ class MockPumpState:
     phases: dict[int, MockPhase] = field(default_factory=lambda: {1: MockPhase()})
 
 
-class MockNE501Controller:
+class MockNE501Controller(NE501Controller):
     def __init__(self, addresses: Iterable[int] = range(4), latency: float = 0.04) -> None:
         self.pumps = {address: MockPumpState() for address in addresses}
         self.latency = latency
@@ -78,7 +80,7 @@ class MockNE501Controller:
                     return self._response(address, state.status, "?OOR")
                 state.diameter = value
                 state.volume_unit = "UL" if value <= 14.0 else "ML"
-            return self._response(address, state.status, f"{state.diameter:.2f}")
+            return self._response(address, state.status, format_diameter(state.diameter))
         if keyword == "PHN":
             if args:
                 if state.status in {"I", "W", "X"}:
@@ -153,76 +155,11 @@ class MockNE501Controller:
         return {address: self.send_command(address, "VER") for address in addresses if address in self.pumps}
 
     def set_diameter(self, address: int, diameter_mm: float) -> DiameterConfirmation:
-        state = self.pumps[address]
-        if state.status != "S":
-            first = self.send_command(address, "STP")
-            if first.status == "P":
-                self.send_command(address, "STP")
-        set_response = self.send_command(address, f"DIA {diameter_mm:.2f}")
-        query_response = self.send_command(address, "DIA")
-        return DiameterConfirmation(diameter_mm, first_float(query_response.data), set_response, query_response)
+        return NE501Controller.set_diameter(self, address, diameter_mm)
 
     def configure_program(self, address: int, settings: ProgramSettings) -> ProgramConfirmation:
-        state = self.pumps[address]
-        steady_value, steady_unit, steady_text = normalize_rate(settings.rate, settings.rate_unit)
-        global_volume_unit, volumes = choose_program_volume_unit(settings)
-        prime_volume_value, prime_volume_text = volumes.get("Prime volume", (0.0, "0"))
-        steady_volume_value, steady_volume_text = volumes.get("Target volume", (0.0, "0"))
-        prime_rate = (
-            prime_rate_ml_hr(settings.diameter_mm, settings.prime_speed_level)
-            if settings.prime_enabled else None
-        )
-        results = []
-
-        def send(command: str):
-            response = self.send_command(address, command)
-            results.append((address, command, response))
-            return response
-
-        if state.status != "S":
-            first_stop = send("STP")
-            if first_stop.status == "P":
-                send("STP")
-        if settings.prime_enabled:
-            send("PHN 1")
-            send("FUN RAT")
-            send(f"VOL {global_volume_unit}")
-            _, prime_unit, prime_rate_text = normalize_rate(prime_rate, "MH", round_down=True)
-            send(f"RAT {prime_rate_text} {prime_unit}")
-            prime_rate = convert_rate(float(prime_rate_text), prime_unit, "MH")
-            send(f"VOL {prime_volume_text}")
-            send(f"DIR {settings.direction}")
-            send("PHN 2")
-            send("FUN RAT")
-            send(f"RAT {steady_text} {steady_unit}")
-            send("VOL 0" if settings.continuous else f"VOL {steady_volume_text}")
-            send(f"DIR {settings.direction}")
-            if not settings.continuous:
-                send("PHN 3")
-                send("FUN STP")
-        else:
-            send("PHN 1")
-            send("FUN RAT")
-            send(f"VOL {global_volume_unit}")
-            send(f"RAT {steady_text} {steady_unit}")
-            send("VOL 0" if settings.continuous else f"VOL {steady_volume_text}")
-            send(f"DIR {settings.direction}")
-            if not settings.continuous:
-                send("PHN 2")
-                send("FUN STP")
-
-        verified = all(r.ok for _, _, r in results)
-        # Set current phase back to 1 for a predictable simulation display.
-        state.current_phase = 1
-        return ProgramConfirmation(
-            results,
-            verified,
-            "Program verified" if verified else "A mock program command was rejected",
-            prime_rate,
-            steady_value,
-            steady_unit,
-            global_volume_unit,
-        )
+        # Use the exact production validation and read-back path with simulated I/O.
+        return NE501Controller.configure_program(self, address, settings)
 
     def stop_pump(self, address: int):
         status = self.send_command(address, "")

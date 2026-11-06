@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
 import math
 import re
 import threading
@@ -9,6 +8,8 @@ import time
 from typing import Iterable, Optional
 
 from .protocol import ETX, PumpResponse, build_command, first_float, parse_response
+from .syringe import MAX_LINEAR_SPEED_MM_MIN, format_diameter
+from .pump_numbers import format_pump_number, convert_rate, normalize_rate
 
 
 class PumpConnectionError(RuntimeError):
@@ -20,10 +21,8 @@ class PumpTimeoutError(TimeoutError):
 
 
 # NE-500 / NE-501 specified maximum pusher speed: 5.100464828 cm/min.
-MAX_LINEAR_SPEED_MM_MIN = 51.00464828
 VALID_RATE_UNITS = {"UM", "MM", "UH", "MH"}
 VALID_VOLUME_UNITS = {"UL", "ML"}
-_RATE_ALTERNATE_UNIT = {"MH": "UH", "UH": "MH", "MM": "UM", "UM": "MM"}
 
 # Application-defined Prime presets. These are fractions of the NE-501
 # mechanical maximum pusher speed; they are not manufacturer-defined detents.
@@ -36,44 +35,6 @@ PRIME_SPEED_LEVELS = {
     "LOW": 0.10,
     "MIN": 0.05,
 }
-
-
-def format_pump_number(value: float, significant_digits: int = 4, *, round_down: bool = False) -> str:
-    """Format numeric data for the NE-501 command parser.
-
-    The pump manual specifies at most four numeric digits and at most three
-    digits to the right of the decimal point. Scientific notation is not used.
-    Positive values that cannot be represented under those constraints raise
-    ValueError so the caller can choose a different unit.
-    """
-    if significant_digits != 4:
-        raise ValueError("NE-501 numeric data must use at most four digits")
-    if not math.isfinite(value) or value < 0:
-        raise ValueError("Pump values must be finite and non-negative")
-    if value == 0:
-        return "0"
-    if value > 9999:
-        raise ValueError("Pump numeric value exceeds the four-digit limit")
-
-    integer_digits = int(math.floor(math.log10(value))) + 1 if value >= 1 else 0
-    if integer_digits > 4:
-        raise ValueError("Pump numeric value exceeds the four-digit limit")
-    decimals = min(3, max(0, 4 - integer_digits))
-
-    quantizer = Decimal("1").scaleb(-decimals)
-    rounding = ROUND_FLOOR if round_down else ROUND_HALF_UP
-    rounded = Decimal(str(value)).quantize(quantizer, rounding=rounding)
-    if rounded <= 0:
-        raise ValueError("Value is too small for the selected pump unit")
-    if rounded > Decimal("9999"):
-        raise ValueError("Rounded pump value exceeds the four-digit limit")
-
-    text = f"{rounded:.{decimals}f}".rstrip("0").rstrip(".")
-    digit_count = sum(ch.isdigit() for ch in text)
-    fractional_digits = len(text.split(".", 1)[1]) if "." in text else 0
-    if digit_count > 4 or fractional_digits > 3:
-        raise ValueError("Value cannot be represented in NE-501 numeric format")
-    return text
 
 
 def maximum_rate_ml_hr(diameter_mm: float) -> float:
@@ -108,43 +69,6 @@ def rate_to_ml_hr(value: float, unit: str) -> float:
     if unit == "UM":
         return value * 60.0 / 1000.0
     raise ValueError("Invalid flow-rate unit")
-
-
-def convert_rate(value: float, from_unit: str, to_unit: str) -> float:
-    """Convert rate while preserving the user's time basis (min or hr)."""
-    if from_unit not in VALID_RATE_UNITS or to_unit not in VALID_RATE_UNITS:
-        raise ValueError("Invalid rate unit")
-    if from_unit[1] != to_unit[1]:
-        raise ValueError("Rate conversion must preserve min/hr time basis")
-    if from_unit == to_unit:
-        return value
-    if from_unit[0] == "M" and to_unit[0] == "U":
-        return value * 1000.0
-    if from_unit[0] == "U" and to_unit[0] == "M":
-        return value / 1000.0
-    raise ValueError("Unsupported rate conversion")
-
-
-def normalize_rate(value: float, unit: str, *, round_down: bool = False) -> tuple[float, str, str]:
-    """Return (programmed value, unit, text), switching mL/µL when needed."""
-    if value <= 0:
-        raise ValueError("Flow rate must be greater than zero")
-    if unit not in VALID_RATE_UNITS:
-        raise ValueError("Invalid flow-rate unit")
-
-    candidates = [(value, unit)]
-    alt = _RATE_ALTERNATE_UNIT[unit]
-    candidates.append((convert_rate(value, unit, alt), alt))
-    errors: list[str] = []
-    for candidate_value, candidate_unit in candidates:
-        try:
-            text = format_pump_number(candidate_value, round_down=round_down)
-            return float(text), candidate_unit, text
-        except ValueError as exc:
-            errors.append(str(exc))
-    raise ValueError(
-        f"Flow rate {value:g} {unit} cannot be represented by the NE-501 numeric format"
-    )
 
 
 def convert_volume(value: float, from_unit: str, to_unit: str) -> float:
@@ -243,7 +167,8 @@ class DiameterConfirmation:
             self.set_response.ok
             and self.query_response.ok
             and self.confirmed_mm is not None
-            and abs(self.requested_mm - self.confirmed_mm) <= 0.01
+            and math.isclose(float(format_diameter(self.requested_mm)), self.confirmed_mm,
+                             rel_tol=0, abs_tol=1e-9)
         )
 
 
@@ -464,8 +389,7 @@ class NE501Controller:
         return results
 
     def set_diameter(self, address: int, diameter_mm: float) -> DiameterConfirmation:
-        if not 0.1 <= diameter_mm <= 50.0:
-            raise ValueError("Syringe diameter must be between 0.10 and 50.00 mm")
+        diameter_text = format_diameter(diameter_mm)
         stop_results = self._ensure_program_stopped(address)
         for _, command, response in stop_results:
             if command == "STATUS":
@@ -474,7 +398,7 @@ class NE501Controller:
                 continue
             if not self._stop_result_ok(command, response):
                 raise PumpConnectionError(describe_rejection(command, response))
-        set_response = self.send_command(address, f"DIA {diameter_mm:.2f}")
+        set_response = self.send_command(address, f"DIA {diameter_text}")
         query_response = self.send_command(address, "DIA")
         return DiameterConfirmation(
             requested_mm=diameter_mm,
@@ -672,14 +596,14 @@ class NE501Controller:
             value, unit = parse_number_and_unit(response.data, VALID_RATE_UNITS)
             return (
                 value is not None and unit == expected_unit
-                and math.isclose(value, expected_value, rel_tol=0.001, abs_tol=0.001)
+                and math.isclose(value, expected_value, rel_tol=1e-9, abs_tol=1e-9)
             )
 
         def volume_matches(response: PumpResponse, expected_value: float) -> bool:
             value, unit = parse_number_and_unit(response.data, VALID_VOLUME_UNITS)
             return (
                 value is not None and unit == program_volume_unit
-                and math.isclose(value, expected_value, rel_tol=0.001, abs_tol=0.001)
+                and math.isclose(value, expected_value, rel_tol=1e-9, abs_tol=1e-9)
             )
 
         steady_phase = 2 if settings.prime_enabled else 1
@@ -700,7 +624,7 @@ class NE501Controller:
                 value, unit = parse_number_and_unit(prime_rate_response.data, VALID_RATE_UNITS)
                 if value is not None and unit in {"MH", "UH"}:
                     actual_ml_hr = convert_rate(value, unit, "MH")
-                    prime_rate_ok = math.isclose(actual_ml_hr, prime_rate_actual, rel_tol=0.001, abs_tol=0.001)
+                    prime_rate_ok = math.isclose(actual_ml_hr, prime_rate_actual, rel_tol=1e-9, abs_tol=1e-9)
             checks += [
                 ("prime FUN", prime.get("FUN") is not None and "RAT" in prime["FUN"].data.upper()),
                 ("prime RAT", prime_rate_ok),

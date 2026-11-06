@@ -9,6 +9,8 @@ import json
 import math
 from typing import Any
 from uuid import uuid4
+from .syringe import format_diameter, plunger_speed_mm_min, MIN_LINEAR_SPEED_MM_MIN, MAX_LINEAR_SPEED_MM_MIN
+from .pump_numbers import normalize_rate
 
 TICKS_PER_SECOND = 10
 MAX_DURATION_TICKS = 7 * 24 * 60 * 60 * TICKS_PER_SECOND
@@ -24,7 +26,7 @@ def _integer(value: Any, name: str) -> int:
 
 
 def tick_from_seconds(value: Any) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not -604800 <= value <= 604800:
         raise ValueError('Time must be a finite number')
     tick = round(value * TICKS_PER_SECOND)
     if abs(value * TICKS_PER_SECOND - tick) > 1e-7:
@@ -60,10 +62,12 @@ class Clip:
 class Timeline:
     """Four channels mapped to logical pump indices 0-3."""
 
-    def __init__(self, total: int = 1200, clips: list[Clip] | None = None, addresses: list[int] | None = None):
+    def __init__(self, total: int = 1200, clips: list[Clip] | None = None, addresses: list[int] | None = None,
+                 diameters: list[float | None] | None = None):
         self.total = total
         self.clips = list(clips or [])
         self.addresses = list(addresses if addresses is not None else [0, 1, 2, 3])
+        self.diameters = list(diameters if diameters is not None else [None] * 4)
         self.validate()
 
     def validate(self) -> None:
@@ -74,6 +78,11 @@ class Timeline:
             raise ValueError('四台幫浦的位址必須介於 00–99，且不可重複。')
         if len(self.clips) > 800:
             raise ValueError('流程區塊超過上限。')
+        if len(self.diameters) != 4:
+            raise ValueError('Exactly four syringe diameters are required.')
+        for value in self.diameters:
+            if value is not None:
+                format_diameter(value)
         ids: set[str] = set()
         for clip in self.clips:
             if not isinstance(clip, Clip) or not isinstance(clip.id, str) or not clip.id or len(clip.id) > 100 or clip.id in ids:
@@ -86,7 +95,7 @@ class Timeline:
                 raise ValueError('區塊時間或幫浦軌道超出範圍。')
             if clip.direction not in DIRECTIONS or clip.unit not in UNITS:
                 raise ValueError('區塊方向或流速單位不正確。')
-            if isinstance(clip.rate, bool) or not isinstance(clip.rate, (int, float)) or not math.isfinite(clip.rate) or not 0.0001 <= clip.rate <= 9999 or abs(clip.rate * 10000 - round(clip.rate * 10000)) > 1e-7:
+            if isinstance(clip.rate, bool) or not isinstance(clip.rate, (int, float)) or not 0.0001 <= clip.rate <= 9999 or abs(clip.rate * 10000 - round(clip.rate * 10000)) > 1e-7:
                 raise ValueError('流速須介於 0.0001–9999，最多四位小數。')
         for pump in range(4):
             clips = sorted((c for c in self.clips if c.pump == pump), key=lambda c: c.start)
@@ -97,7 +106,26 @@ class Timeline:
                     raise ValueError(f'幫浦 {pump + 1} 的時間區塊不可重疊。')
 
     def copy(self) -> Timeline:
-        return Timeline(self.total, self.clips.copy(), self.addresses)
+        return Timeline(self.total, self.clips.copy(), self.addresses, self.diameters)
+
+    def set_diameters(self, diameters: list[float | None]) -> None:
+        candidate = Timeline(self.total, self.clips, self.addresses, diameters)
+        self.diameters = candidate.diameters
+
+    def plunger_speed(self, clip: Clip) -> float | None:
+        diameter = self.diameters[clip.pump]
+        return None if diameter is None else plunger_speed_mm_min(clip.rate, clip.unit, diameter)
+
+    def validate_syringes(self) -> None:
+        self.validate()
+        for pump in sorted({c.pump for c in self.clips}):
+            if self.diameters[pump] is None:
+                raise ValueError(f'Pump {pump + 1}: set the syringe inside diameter before checking the flow.')
+        for clip in self.clips:
+            normalize_rate(clip.rate, dict(zip(UNITS, ('UM', 'MM', 'UH', 'MH')))[clip.unit])
+            speed = self.plunger_speed(clip)
+            if speed is not None and not MIN_LINEAR_SPEED_MM_MIN * (1 - 1e-9) <= speed <= MAX_LINEAR_SPEED_MM_MIN * (1 + 1e-9):
+                raise ValueError(f'Pump {clip.pump + 1}: requested flow is outside the syringe-dependent mechanical range.')
 
     def get(self, clip_id: str | None) -> Clip | None:
         return next((c for c in self.clips if c.id == clip_id), None)
@@ -106,12 +134,12 @@ class Timeline:
         if self.get(clip.id) is None:
             raise ValueError('找不到選取區塊。')
         candidate = [clip if c.id == clip.id else c for c in self.clips]
-        Timeline(self.total, candidate, self.addresses)
+        Timeline(self.total, candidate, self.addresses, self.diameters)
         self.clips = candidate
 
     def add(self, clip: Clip) -> None:
         candidate = self.clips + [clip]
-        Timeline(self.total, candidate, self.addresses)
+        Timeline(self.total, candidate, self.addresses, self.diameters)
         self.clips = candidate
 
     def delete(self, clip_id: str) -> None:
@@ -120,7 +148,7 @@ class Timeline:
         self.clips = [c for c in self.clips if c.id != clip_id]
 
     def set_total(self, total: int) -> None:
-        Timeline(total, self.clips, self.addresses)
+        Timeline(total, self.clips, self.addresses, self.diameters)
         self.total = total
 
     def split(self, clip_id: str, tick: int) -> Clip:
@@ -132,7 +160,7 @@ class Timeline:
         left = replace(clip, end=tick)
         right = replace(clip, id=uuid4().hex, start=tick)
         candidate = [left if c.id == clip.id else c for c in self.clips] + [right]
-        Timeline(self.total, candidate, self.addresses)
+        Timeline(self.total, candidate, self.addresses, self.diameters)
         self.clips = candidate
         return right
 
@@ -162,6 +190,7 @@ class Timeline:
         self.validate()
         data = {'format': FORMAT, 'version': 1, 'duration': self.total / 10,
                 'tracks': [{'id': p + 1, 'address': f'{self.addresses[p]:02d}',
+                            'diameter_mm': self.diameters[p],
                             'blocks': [{'id': c.id, 'start': c.start / 10, 'end': c.end / 10,
                                         'direction': c.direction, 'rate': c.rate, 'unit': c.unit}
                                        for c in sorted(self.clips, key=lambda c: c.start) if c.pump == p]}
@@ -182,10 +211,12 @@ class Timeline:
                 raise ValueError('流程檔必須包含四條幫浦軌道。')
             clips: list[Clip] = []
             addresses: list[int] = []
+            diameters: list[float | None] = []
             for p, t in enumerate(tracks):
                 if not isinstance(t, dict) or type(t.get('id')) is not int or t.get('id') != p + 1 or not isinstance(t.get('address'), str) or len(t['address']) != 2 or not t['address'].isascii() or not t['address'].isdigit() or not isinstance(t.get('blocks'), list):
                     raise ValueError('幫浦軌道資料不正確。')
                 addresses.append(int(t['address']))
+                diameters.append(t.get('diameter_mm'))
                 if len(t['blocks']) > 200:
                     raise ValueError('單一幫浦的區塊超過 200 個。')
                 for b in t['blocks']:
@@ -193,7 +224,7 @@ class Timeline:
                         raise ValueError('區塊資料必須為物件。')
                     clips.append(Clip(b['id'], p, tick_from_seconds(b['start']), tick_from_seconds(b['end']),
                                       b['direction'], b['rate'], b['unit']))
-            return cls(total, clips, addresses)
+            return cls(total, clips, addresses, diameters)
         except (KeyError, TypeError, json.JSONDecodeError, UnicodeError, RecursionError) as exc:
             raise ValueError('無法讀取流程檔，請確認格式。') from exc
 
@@ -204,4 +235,4 @@ def example_timeline(addresses: list[int] | None = None) -> Timeline:
                            Clip('c', 1, 100, 750, 'INF', 6, 'µL/min'),
                            Clip('d', 2, 200, 450, 'INF', 4, 'µL/min'),
                            Clip('e', 2, 650, 1200, 'INF', 8, 'µL/min'),
-                           Clip('f', 3, 850, 1200, 'WDR', 2, 'µL/min')], addresses)
+                           Clip('f', 3, 850, 1200, 'WDR', 2, 'µL/min')], addresses, [10.0] * 4)

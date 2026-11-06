@@ -100,7 +100,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: NE501-installer-candidate
-          path: release/NE501_UI_v1.3.0_Setup.exe
+          path: release/NE501_UI_v1.3.1_Setup.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -123,7 +123,7 @@ jobs:
           path: release
       - name: Test installer and installed application
         shell: pwsh
-        run: ./build/test_installer.ps1 -Arch '${{ matrix.arch }}' -Installer 'release/NE501_UI_v1.3.0_Setup.exe'
+        run: ./build/test_installer.ps1 -Arch '${{ matrix.arch }}' -Installer 'release/NE501_UI_v1.3.1_Setup.exe'
 
   verified-artifact:
     needs: install-test
@@ -144,26 +144,28 @@ jobs:
       - name: Create SHA-256 checksum
         shell: pwsh
         run: |
-          $f = 'release/NE501_UI_v1.3.0_Setup.exe'
+          $f = 'release/NE501_UI_v1.3.1_Setup.exe'
           $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$h  NE501_UI_v1.3.0_Setup.exe" | Set-Content -Encoding ascii 'release/SHA256.txt'
+          "$h  NE501_UI_v1.3.1_Setup.exe" | Set-Content -Encoding ascii 'release/SHA256.txt'
       - uses: actions/upload-artifact@v4
         with:
           name: NE501-installer-verified
           path: |
-            release/NE501_UI_v1.3.0_Setup.exe
+            release/NE501_UI_v1.3.1_Setup.exe
             release/SHA256.txt
             release/ui-preview-x64.png
             release/ui-shots/ui-shots-source/manual-zh_TW-1280-100.png
             release/ui-shots/ui-shots-source/manual-en-1280-100.png
             release/ui-shots/ui-shots-source/timeline-zh_TW-1280-100.png
             release/ui-shots/ui-shots-source/timeline-en-1280-100.png
+            release/ui-shots/ui-shots-source/syringes-zh_TW-130.png
+            release/ui-shots/ui-shots-source/syringes-en-130.png
           if-no-files-found: error
           retention-days: 30
 
   publish-prerelease:
     needs: [verified-artifact, ui-review]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/ne501-v1.3.0'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/ne501-v1.3.1'
     runs-on: windows-2022
     permissions:
       contents: write
@@ -178,6 +180,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'ne501-v1.3.0-build-${{ github.run_number }}'
-          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview v1.3.0 Guided Manual UI (Timeline Simulation)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_UI_v1.3.0_Setup.exe' 'release/SHA256.txt' 'release/ui-preview-x64.png' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt' 'UI_REVIEW_2026-11-06.md' 'UI_REVIEW_v1.3.0.md' 'BILINGUAL_MANUAL_UI_v1.3.0.md' 'BILINGUAL_UI_QUICK_START_en.txt' 'release/ui-shots/ui-shots-source/manual-zh_TW-1280-100.png' 'release/ui-shots/ui-shots-source/manual-en-1280-100.png' 'release/ui-shots/ui-shots-source/timeline-zh_TW-1280-100.png' 'release/ui-shots/ui-shots-source/timeline-en-1280-100.png'
+          $tag = 'ne501-v1.3.1-build-${{ github.run_number }}'
+          gh release create $tag --target '${{ github.sha }}' --prerelease --title 'NE-501 Timeline UI Preview v1.3.1 Syringe Setup and Audit Fixes (Timeline Simulation)' --notes-file TIMELINE_PREVIEW_README_zh.txt 'release/NE501_UI_v1.3.1_Setup.exe' 'release/SHA256.txt' 'release/ui-preview-x64.png' 'DISCLAIMER.txt' 'REFERENCES.md' 'TIMELINE_PREVIEW_README_zh.txt' 'UI_REVIEW_2026-11-06.md' 'SOURCE_AUDIT_v1.3.1.md' 'BILINGUAL_MANUAL_UI_v1.3.1.md' 'BILINGUAL_UI_QUICK_START_en.txt' 'release/ui-shots/ui-shots-source/manual-zh_TW-1280-100.png' 'release/ui-shots/ui-shots-source/manual-en-1280-100.png' 'release/ui-shots/ui-shots-source/timeline-zh_TW-1280-100.png' 'release/ui-shots/ui-shots-source/timeline-en-1280-100.png' 'release/ui-shots/ui-shots-source/syringes-zh_TW-130.png' 'release/ui-shots/ui-shots-source/syringes-en-130.png'
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed. The verified artifact remains available in this Actions run.' }

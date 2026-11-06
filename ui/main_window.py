@@ -6,6 +6,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QGridLayout, QHBoxLayout, QMainWindow, QScrollArea, QSizePolicy, QSplitter, QVBoxLayout, QWidget, QStackedWidget, QTabWidget
 from ne501.controller import NE501Controller, ProgramSettings
 from ne501 import __version__
+from ne501.syringe import format_diameter
 from ne501.logging_utils import CsvCommandLogger
 from ne501.mock_controller import MockNE501Controller
 from ne501.protocol import PumpResponse
@@ -194,6 +195,8 @@ class MainWindow(QMainWindow):
         self.stop_active_button.setText(f'Stop selected ({count})')
         self.apply_active_button.setStyleSheet('border: 2px solid #ffd166;' if can_apply and not can_run else '')
         self.run_active_button.setStyleSheet('border: 2px solid #ffd166;' if can_run else '')
+        if getattr(self,'timeline_editor',None) is not None:
+            self.timeline_editor.set_device_diameters({address:p.confirmed_diameter if p.online else None for address,p in self.panels.items()})
 
     def resolve_group_blocker(self):
         address=self._first_group_blocker
@@ -362,12 +365,12 @@ class MainWindow(QMainWindow):
             return self.controller.set_diameter(address, diameter_mm)
 
         def success(confirmation) -> None:
-            self.log_response(address, f"DIA {diameter_mm:.2f}", confirmation.set_response)
+            self.log_response(address, f"DIA {format_diameter(diameter_mm)}", confirmation.set_response)
             self.log_response(address, "DIA", confirmation.query_response)
             panel.update_from_status(confirmation.query_response.status)
             if confirmation.confirmed:
                 panel.confirm_diameter(float(confirmation.confirmed_mm))
-                panel.set_last_response(f"Diameter verified:  {confirmation.confirmed_mm:.2f} mm")
+                panel.set_last_response(f"Diameter verified:  {confirmation.confirmed_mm:.3f} mm")
             else:
                 panel.invalidate_diameter("Verification failed; check the pump response")
                 panel.set_last_response(self.describe_response(confirmation.query_response))

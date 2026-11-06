@@ -193,11 +193,11 @@ class SerialHardeningTests(unittest.TestCase):
 
 
 class ConfigValidationTests(unittest.TestCase):
-    def test_duplicate_addresses_fall_back_to_defaults(self):
-        from ne501.config import _validated_config, DEFAULT_CONFIG
+    def test_duplicate_addresses_require_configuration_correction(self):
+        from ne501.config import _validated_config
 
-        config = _validated_config({"addresses": [0, 0, 2, 3]})
-        self.assertEqual(config["addresses"], DEFAULT_CONFIG["addresses"])
+        with self.assertRaisesRegex(ValueError, "unique integers"):
+            _validated_config({"addresses": [0, 0, 2, 3]})
 
     def test_invalid_baudrate_falls_back_to_19200(self):
         from ne501.config import _validated_config

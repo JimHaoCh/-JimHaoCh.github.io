@@ -51,14 +51,25 @@ def _validated_config(candidate: dict[str, Any]) -> dict[str, Any]:
     if baudrate_int in VALID_BAUDRATES:
         config["baudrate"] = baudrate_int
 
-    addresses = candidate.get("addresses")
-    if isinstance(addresses, list):
-        try:
-            normalized = [int(value) for value in addresses]
-        except (TypeError, ValueError):
-            normalized = []
-        if normalized and len(normalized) == len(set(normalized)) and all(0 <= value <= 99 for value in normalized):
-            config["addresses"] = normalized
+    if 'addresses' in candidate:
+        addresses = candidate['addresses']
+        message = 'Pump addresses must be unique integers from 0 to 99.'
+        if not isinstance(addresses, list) or not addresses:
+            raise ValueError(message)
+        normalized = []
+        for value in addresses:
+            if type(value) is int:
+                address = value
+            elif isinstance(value, str) and value.isascii() and value.isdigit() and 1 <= len(value) <= 2:
+                address = int(value)
+            else:
+                raise ValueError(message)
+            if not 0 <= address <= 99:
+                raise ValueError(message)
+            normalized.append(address)
+        if len(set(normalized)) != len(normalized):
+            raise ValueError(message)
+        config['addresses'] = normalized
 
     title = candidate.get("window_title")
     if isinstance(title, str) and title.strip():

@@ -205,6 +205,10 @@ class TimelineCanvas(QWidget):
             if row < 50: f.setPointSizeF(8.5)
             p.setFont(f); p.setPen(QColor('#a5b3c4'))
             p.drawText(26, round(y + (48 if row >= 50 else 39)), f'{self.model.addresses[pump]:02d} · 模擬')
+            if row >= 66:
+                diameter=self.model.diameters[pump]
+                f.setPointSizeF(8);p.setFont(f)
+                p.drawText(26,round(y+65),f'ID {diameter:g} mm' if diameter is not None else 'ID —')
         p.restore()
         p.end()
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import time
+import math
+from ne501.syringe import format_diameter
 
 from PySide6.QtCore import QSignalBlocker, Signal
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
@@ -138,8 +140,8 @@ class PumpPanel(GroupBox):
         diameter.setContentsMargins(0, 0, 0, 0)
         self.diameter_input = QDoubleSpinBox()
         self.diameter_input.setRange(.1, 50)
-        self.diameter_input.setDecimals(2)
-        self.diameter_input.setSingleStep(.01)
+        self.diameter_input.setDecimals(3)
+        self.diameter_input.setSingleStep(.001)
         self.diameter_input.setValue(10)
         self.diameter_input.setSuffix(' mm')
         self.diameter_input.setToolTip('Enter the actual syringe inside diameter in millimetres.')
@@ -336,6 +338,12 @@ class PumpPanel(GroupBox):
             self.diameter_input.setFocus()
             return
         self.diameter_input.interpretText()
+        try:
+            format_diameter(self.diameter_input.value())
+        except ValueError as exc:
+            self.diameter_status.setText(str(exc))
+            self.diameter_status.setObjectName('warningLabel')
+            return
         self.set_diameter_requested.emit(self.address, self.diameter_input.value())
 
     def input_errors(self):
@@ -386,7 +394,7 @@ class PumpPanel(GroupBox):
             self._refresh_enabled_state()
 
     def _on_diameter_edited(self, value):
-        if not self._internal_update and self.confirmed_diameter is not None and abs(value - self.confirmed_diameter) > .005:
+        if not self._internal_update and self.confirmed_diameter is not None and not math.isclose(value, self.confirmed_diameter, rel_tol=0, abs_tol=1e-9):
             self.invalidate_diameter('Diameter changed — SET & VERIFY again')
 
     def _on_prime_toggled(self, *_):
@@ -459,7 +467,7 @@ class PumpPanel(GroupBox):
         self.diameter_input.setValue(diameter_mm)
         self._internal_update = False
         self._diameter_editing = False
-        self.diameter_status.setText(f'✓ Verified: {diameter_mm:.2f} mm')
+        self.diameter_status.setText(f'✓ Verified: {diameter_mm:.3f} mm')
         self.diameter_status.setObjectName('successLabel')
         self.setProperty('diameterVerified', True)
         self.settings_applied = False

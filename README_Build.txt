@@ -1,4 +1,4 @@
-v1.3.0：建置結果為 release/NE501_UI_v1.3.0_Setup.exe；版本、兩種架構及安裝驗證見 build/ 與 .github/workflows/windows-build.yml。
+v1.3.1：建置結果為 release/NE501_UI_v1.3.1_Setup.exe；版本、兩種架構及安裝驗證見 build/ 與 .github/workflows/windows-build.yml。
 
 NE-501 Multi Pump Controller v1.0.1 — 建置說明
 

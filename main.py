@@ -18,6 +18,16 @@ from ui.fonts import configure_ui_font
 from ui.i18n import manager
 from ne501.mock_controller import MockNE501Controller
 from ne501 import __version__
+from ui.i18n_widgets import MessageBox as QMessageBox
+
+
+def create_main_window():
+    try:
+        config = load_config()
+    except (ValueError, OSError) as exc:
+        QMessageBox.warning(None, 'Configuration error', str(exc))
+        return None
+    return MainWindow(config)
 
 
 def main() -> int:
@@ -53,7 +63,10 @@ def main() -> int:
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
-    window = MainWindow(load_config())
+    manager.set_language(str(settings.value('language', 'zh_TW')))
+    window = create_main_window()
+    if window is None:
+        return 2
     window.show()
     return app.exec()
 

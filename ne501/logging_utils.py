@@ -5,6 +5,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from .protocol import PumpResponse
 
@@ -24,9 +25,9 @@ class CsvCommandLogger:
     def __init__(self) -> None:
         log_dir = user_data_directory() / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
-        filename = datetime.now().strftime("pump_log_%Y%m%d_%H%M%S.csv")
+        filename = datetime.now().strftime("pump_log_%Y%m%d_%H%M%S_%f_") + uuid4().hex + '.csv'
         self.path = log_dir / filename
-        with self.path.open("w", newline="", encoding="utf-8-sig") as file:
+        with self.path.open("x", newline="", encoding="utf-8-sig") as file:
             writer = csv.writer(file)
             writer.writerow(
                 [

@@ -323,6 +323,37 @@ CATALOG.extend([
 ('Complete the input fields.','請完成輸入欄位。'),
 ])
 
+CATALOG.extend([
+('Timeline syringe diameters','流程針筒內徑'),('Syringes ({raw0}/4)','針筒（{raw0}/4）'),
+('Pump / address','幫浦／位址'),('Configured','已設定'),('Inside diameter (mm)','針筒內徑（mm）'),
+('Manual read-back','手動頁回讀'),('Use','啟用'),('Not verified','尚未確認'),
+('Verified: {raw0} mm','已確認：{raw0} mm'),('Use manual read-backs','帶入手動頁已確認內徑'),
+('Apply syringe settings','套用針筒設定'),('Syringe settings updated.','已更新針筒設定。'),
+('Set the actual inside diameter for each used pump. Flow units describe volume; diameter converts flow to plunger speed.',
+ '請設定各台使用中幫浦的實際針筒內徑。流速單位表示體積；內徑用於換算推桿速度。'),
+('Timeline values are planning data. Manual Control must write and verify the actual device diameter. This dialog sends no pump commands.',
+ '此處保存流程規劃值。操作實體幫浦前，須在手動控制頁寫入並確認設備內徑。此視窗僅編輯規劃資料。'),
+('Plan diameter: {raw0} mm','規劃內徑：{raw0} mm'),('Plan diameter: not set','規劃內徑：尚未設定'),
+('Device diameter: {raw0} mm','設備內徑：{raw0} mm'),('Device diameter: not verified','設備內徑：尚未確認'),
+('Plan/device diameter mismatch','規劃與設備內徑不同'),
+('Plunger speed: {raw0} mm/min','推桿速度：{raw0} mm/min'),
+('Set syringe diameter to calculate plunger speed.','設定針筒內徑後，即顯示推桿速度換算。'),
+('Device rate: {raw0} {raw1}','設備指令流速：{raw0} {raw1}'),
+('Set syringe diameters for all used pumps before checking the flow.','請先設定所有使用中幫浦的針筒內徑，再檢查流程。'),
+('Pump {raw0}: {msg0}','幫浦 {raw0}：{msg0}'),
+('Pump {raw0}: set the syringe inside diameter before checking the flow.','幫浦 {raw0}：請先設定針筒內徑，再檢查流程。'),
+('Pump {raw0}: requested flow is outside the syringe-dependent mechanical range.','幫浦 {raw0}：要求流速超出該內徑的機械速度範圍。'),
+('Syringe diameter supports four numeric digits and up to three decimal places.','針筒內徑最多四位數字、小數點後最多三位，請調整輸入值。'),
+('Exactly four syringe diameters are required.','針筒內徑資料須包含四台幫浦。'),
+('Flow rate must be finite and non-negative.','流速須為有限的非負數。'),
+('Pump values must be finite and non-negative, and at most 9999','幫浦數值須為有限的非負數，且不得超過 9999。'),
+('ID {raw0} mm','內徑 {raw0} mm'),('ID —','內徑未設定'),
+('Demo loaded with 10 mm example diameters.','已載入示範流程，含 10 mm 示範內徑。'),
+('Example workflow: 10 mm example diameters; use Syringes to enter the actual values.','示範流程含 10 mm 示範內徑；請由「針筒」設定實際數值。'),
+('Pump addresses must be unique integers from 0 to 99.','幫浦位址須為 0–99 的整數，且不得重複；請修正設定檔。'),
+('Configuration error','設定檔錯誤'),
+])
+
 _exact = {}
 _patterns = []
 def _pattern(template):
