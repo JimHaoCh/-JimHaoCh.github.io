@@ -198,7 +198,7 @@ class AuditSyringeUITests(unittest.TestCase):
             with patch('ui.timeline_editor.QFileDialog.getOpenFileName',return_value=(str(path),'')),patch('ui.timeline_editor.QMessageBox.question',return_value=QMessageBox.StandardButton.Save):
                 self.ui.open_file()
             self.assertEqual(self.ui.model.get('a').rate,20)
-            self.assertEqual(Timeline.from_json(path.read_text()).get('a').rate,20)
+            self.assertEqual(Timeline.from_json(path.read_text(encoding='utf-8')).get('a').rate,20)
             self.assertFalse(self.ui.modified())
     def test_dialog_fits_two_languages_and_large_font(self):
         self.app.setStyleSheet(build_stylesheet(1.3))
