@@ -310,3 +310,21 @@ class BilingualManualTests(unittest.TestCase):
         self.assertIn('s ago',panel.last_check_label.source_text)
         self.assertNotIn('needs refresh',panel.last_check_label.source_text)
         self.assertTrue(panel.settings_applied);self.assertTrue(panel.editor_run_button.isEnabled())
+
+    def test_compact_group_reset_keeps_every_pump_stop_visible(self):
+        self.ready_mock();self.win.mode_tabs.setCurrentIndex(0)
+        self.win.ui_scale_combo.setCurrentIndex(self.win.ui_scale_combo.findData(1.3))
+        self.win.resize(1024,768)
+        for panel in self.win.panels.values():
+            panel.confirm_diameter(10);panel.mark_settings_applied();panel.set_active(True)
+            panel.open_diameter_editor();panel.diameter_input.setValue(12)
+        for language in ('zh_TW','en'):
+            manager.set_language(language)
+            for _ in range(3):self.app.processEvents()
+            viewport=self.win.panel_scroll.viewport()
+            for address,panel in self.win.panels.items():
+                pos=panel.stop_button.mapTo(viewport,QPoint(0,0))
+                self.assertGreaterEqual(pos.y(),0)
+                self.assertLessEqual(pos.y()+panel.stop_button.height(),viewport.height(),(language,address))
+                self.assertFalse(panel.editor_run_button.isEnabled())
+                self.assertIn('Group selection cleared',panel._source_tip)

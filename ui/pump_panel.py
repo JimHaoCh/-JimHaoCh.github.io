@@ -630,7 +630,12 @@ class PumpPanel(GroupBox):
             mode = f'Prime: {settings.prime_volume:g} {volume_unit} → {mode}'
         self.mode_label.setText(mode)
         self.target_label.setToolTip(self.mode_label.source_text)
-        self.ready_label.setText(self._group_notice if self._compact and self._group_notice else self.readiness())
+        card_guidance = self.readiness()
+        if self._compact and self._group_notice:
+            card_guidance = 'Group cleared — verify diameter.'
+        elif self._compact and self.input_errors():
+            card_guidance = 'Complete the input fields.'
+        self.ready_label.setText(card_guidance)
         self.ready_label.setVisible(not self.running or self.stop_pending or self.last_status is None)
         style = 'successLabel' if not self.start_blocker() else 'secondaryLabel' if self.running else 'pendingLabel'
         if self.ready_label.objectName() != style:
@@ -651,7 +656,7 @@ class PumpPanel(GroupBox):
         self.motion_label.setVisible(not self._compact)
         self.mode_label.setVisible(not self._compact)
         self.last_check_label.setVisible(not self._compact)
-        self.setToolTip(self.next_instruction()+' | '+mode+' | '+self.last_check_label.source_text)
+        self.setToolTip(' | '.join(text for text in (self.next_instruction(),self._group_notice,mode,self.last_check_label.source_text) if text))
         draft = self.current_settings()
         summary_mode = 'Continuous' if draft.continuous else f'Target: {draft.volume:g} {dict((c, l) for l, c in VOLUME_UNITS)[draft.volume_unit]}'
         main = f'Summary: {direction} · {draft.rate:g} {RATE_LABELS[draft.rate_unit]} · {summary_mode}'

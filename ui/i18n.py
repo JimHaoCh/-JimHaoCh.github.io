@@ -319,6 +319,8 @@ CATALOG.extend([
 ('Stop selected ({raw0})','停止所選（{raw0} 台）'),
 ('{raw0} selected | Ready: {raw1}/{raw2} | Addresses: {raw3}','已勾選 {raw0} 台｜就緒 {raw1}/{raw2}｜位址：{raw3}'),
 ('Group: no pumps selected','群組：尚未勾選幫浦'),
+('Group cleared — verify diameter.','群組已取消，請確認內徑。'),
+('Complete the input fields.','請完成輸入欄位。'),
 ])
 
 _exact = {}
