@@ -83,11 +83,11 @@ class TimelineEditor(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
-        banner = QLabel('時間軌模擬預覽  ·  0.1 秒編輯刻度；裝置同步誤差待量測。')
+        banner = QLabel('流程預覽  ·  0.1 秒編輯刻度；播放不傳送幫浦啟動指令。')
         banner.setObjectName('workflowBanner'); banner.setWordWrap(True)
         root.addWidget(banner)
         header = QHBoxLayout()
-        self.file_label = QLabel('示範流程')
+        self.file_label = QLabel('範例流程')
         self.file_label.setStyleSheet('font-size: 12pt; font-weight: 700;')
         self.file_label.setMinimumWidth(80)
         self.file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -114,7 +114,7 @@ class TimelineEditor(QWidget):
         transport.addStretch()
         self.speed_combo = FocusComboBox()
         for label, factor in [('1×', 1), ('5×', 5), ('10×', 10), ('30×', 30)]: self.speed_combo.addItem(label, factor)
-        self.speed_combo.setToolTip('模擬播放速度；預設為實際時間 1×。')
+        self.speed_combo.setToolTip('預覽播放速度；預設為實際時間 1×。')
         transport.addWidget(self.speed_combo)
         root.addLayout(transport)
         self.guide = QLabel(); self.guide.setWordWrap(True); root.addWidget(self.guide)
@@ -214,7 +214,7 @@ class TimelineEditor(QWidget):
         row = QHBoxLayout()
         self.duration_apply = QPushButton('套用總長'); self.duration_cancel = QPushButton('取消')
         row.addWidget(self.duration_apply); row.addWidget(self.duration_cancel); side.addLayout(row)
-        self.demo_button = QPushButton('載入示範'); side.addWidget(self.demo_button)
+        self.demo_button = QPushButton('載入範例'); side.addWidget(self.demo_button)
         note = QLabel('預估體積依設定計算。實際針筒、管路與裝置時序需驗證。')
         note.setObjectName('secondaryLabel'); note.setWordWrap(True); side.addWidget(note)
         side.addStretch()
@@ -270,7 +270,7 @@ class TimelineEditor(QWidget):
                 self.add_button: '在所選幫浦的游標位置尋找空位；也可雙擊軌道空白處。',
                 self.split_button: '在游標處分割選取區塊 Ctrl+B', self.focus_button: '放大選取區塊 F',
                 self.snap_check: '拖曳時吸附到區塊邊界或游標；按住 Alt 暫時關閉。',
-                self.stop_button: '停止模擬並保留游標位置；「起點」回到 0。',
+                self.stop_button: '停止預覽並保留游標位置；「起點」回到 0。',
                 self.apply_button: '套用區塊設定 Enter', self.cancel_button: '取消尚未套用的設定'}
         for widget, tip in tips.items(): widget.setToolTip(tip)
 
@@ -583,7 +583,7 @@ class TimelineEditor(QWidget):
             self.model.validate_syringes()
         except ValueError as exc:
             self.checked = False; self.show_notice(str(exc)); self.update_controls(); return
-        self.checked = True; self.show_notice('流程資料檢查完成。播放為模擬；尚未量測實際幫浦同步。'); self.update_controls()
+        self.checked = True; self.show_notice('流程資料檢查完成。預覽播放不傳送幫浦啟動指令。'); self.update_controls()
 
     def seek(self, ticks):
         if self.running or self.pending(): return
@@ -605,7 +605,7 @@ class TimelineEditor(QWidget):
         self.running = True; self.paused = False
         self.started_at = time.monotonic(); self.started_tick = self.playhead
         self.canvas.active_ids = {c.id for c in self.model.active(self.playhead)}
-        self.timer.start(); self.show_notice('模擬播放中。停止會保留游標；「起點」回到 0。'); self.update_controls(); self.canvas.update()
+        self.timer.start(); self.show_notice('預覽播放中。停止會保留游標；「起點」回到 0。'); self.update_controls(); self.canvas.update()
 
     def advance(self):
         if not self.running: return
@@ -616,7 +616,7 @@ class TimelineEditor(QWidget):
         self.update_transport()
         if self.playhead >= self.model.total:
             self.running = self.paused = False; self.timer.stop(); self.canvas.active_ids.clear()
-            self.show_notice('模擬播放完成。'); self.update_controls(); self.canvas.update()
+            self.show_notice('預覽播放完成。'); self.update_controls(); self.canvas.update()
 
     def pause_preview(self):
         if not self.running: return
@@ -746,7 +746,7 @@ class TimelineEditor(QWidget):
 
     def load_demo(self):
         if self.busy() or not self.prepare_to_leave(): return
-        self._load_model(example_timeline(list(self.config_addresses))); self.show_notice('Demo loaded with 10 mm example diameters.')
+        self._load_model(example_timeline(list(self.config_addresses))); self.show_notice('Example loaded with 10 mm sample diameters.')
 
     def update_transport(self):
         # Floor prevents the displayed clock announcing a boundary before it occurs.
@@ -763,7 +763,7 @@ class TimelineEditor(QWidget):
                 state = ('推注' if clip.direction == 'INF' else '抽取') + f' {clip.rate:g} {clip.unit}'
                 if self.paused: state = '暫停於 ' + state
             else: state = '暫停' if self.paused else '等待' if self.running else '停止'
-            value = f'模擬 {i+1}：{state}'; label.setText(value); values.append(value)
+            value = f'預覽 {i+1}：{state}'; label.setText(value); values.append(value)
         self.status.setText(' | '.join(values))
 
     def update_controls(self):
@@ -778,7 +778,7 @@ class TimelineEditor(QWidget):
         self.canvas.seek_enabled = not self.running and not pending
         self.check_button.setEnabled(self.operation_allowed() and self.plan_ready() and not busy and not pending and not missing and bool(self.model.included_clips()))
         self.play_button.setEnabled(self.can_start_preview())
-        self.play_button.setText('Resume simulation' if self.paused else 'Play simulation')
+        self.play_button.setText('Resume preview' if self.paused else 'Preview flow')
         self.pause_button.setEnabled(self.running); self.stop_button.setEnabled(busy)
         self.home_button.setEnabled(not pending and (busy or self.playhead > 0))
         self.speed_combo.setEnabled(not busy)
@@ -796,14 +796,14 @@ class TimelineEditor(QWidget):
         self.copy_button.setEnabled(has_clip and not busy and not pending); self.delete_button.setEnabled(has_clip and not busy and not pending)
         self.duration_spin.setEnabled(not busy and not self.dirty)
         self.duration_apply.setEnabled(self.duration_dirty and not busy); self.duration_cancel.setEnabled(self.duration_dirty and not busy)
-        if self.running: guide = '模擬播放中 · 可暫停或停止。'
+        if self.running: guide = '預覽播放中 · 可暫停或停止。'
         elif self.paused: guide = '已暫停 · 可定位游標並繼續；停止後可編輯。'
         elif self.dirty: guide = '請先套用或取消右側區塊設定。'
         elif self.duration_dirty: guide = '請先套用或取消流程總長度。'
         elif not self.model.clips: guide = '請選擇幫浦並新增區塊。'
         elif missing: guide = 'Set syringe diameters for all used pumps before checking the flow.'
         elif not self.checked: guide = '編輯後，按「1 檢查流程」再播放。'
-        else: guide = '資料已檢查 · 按播放或時間軌空白鍵開始模擬。'
+        else: guide = '資料已檢查 · 按播放或時間軌空白鍵開始預覽。'
         self.guide.setText(guide)
         self.state_changed.emit()
         for button, highlight in ((self.apply_button, self.dirty), (self.duration_apply, self.duration_dirty),
@@ -811,7 +811,7 @@ class TimelineEditor(QWidget):
                                   (self.check_button, bool(self.model.clips) and not self.checked and not pending and not busy),
                                   (self.play_button, self.checked and not self.running and not pending)):
             button.setStyleSheet('border: 2px solid #ffd166;' if highlight and button.isEnabled() else '')
-        name = self.current_path.name if self.current_path else '示範／未命名流程'
+        name = self.current_path.name if self.current_path else '未命名流程'
         self.file_label.setText(('● ' if self.modified() or pending else '') + name)
         self.file_label.setToolTip(str(self.current_path or '尚未指定儲存檔案'))
         self.update_transport()

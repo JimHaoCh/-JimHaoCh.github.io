@@ -210,7 +210,9 @@ class TimelineCanvas(QWidget):
             f.setBold(False)
             if row < 50: f.setPointSizeF(8.5)
             p.setFont(f); p.setPen(QColor('#a5b3c4'))
-            path = f'{self.model.addresses[pump]:02d} · ' + (self.model.inlets[pump] or '模擬')
+            path = f'{self.model.addresses[pump]:02d}'
+            if self.model.inlets[pump]:
+                path += ' · ' + self.model.inlets[pump]
             if not self.model.used[pump]:
                 path = f'{self.model.addresses[pump]:02d} · ' + tr('Not included')
             path = QFontMetrics(f).elidedText(path, Qt.TextElideMode.ElideRight, self.LEFT - 32)

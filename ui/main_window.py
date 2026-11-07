@@ -56,7 +56,7 @@ class MainWindow(WorkflowController, QMainWindow):
         self.ui_scale_combo.setToolTip('Adjust application text and control size')
         self.connection_label=QLabel('● Disconnected');self.connection_label.setObjectName('offlineStatus')
         self.emergency_button=QPushButton('Stop all pumps');self.emergency_button.setObjectName('emergencyButton')
-        self.emergency_button.setToolTip('Stop simulation and send STOP to every configured pump; wait for individual confirmations.')
+        self.emergency_button.setToolTip('Stop preview playback and send STOP to every configured pump; wait for individual confirmations.')
         common=QHBoxLayout();common.addWidget(QLabel('Language'));common.addWidget(self.language_combo)
         common.addWidget(QLabel('UI size'));common.addWidget(self.ui_scale_combo);common.addWidget(self.connection_label);common.addStretch();common.addWidget(self.emergency_button)
 
@@ -239,9 +239,13 @@ class MainWindow(WorkflowController, QMainWindow):
                     panel.footer_target_label.setText(identity)
                     panel.setTitle(identity if len(identity) < 32 else identity[:29] + '…')
                 connected = self.controller is not None and self.controller.is_connected
-                kind = 'Mock controller' if isinstance(self.controller, MockNE501Controller) else 'Real pumps' if connected else 'Offline planning'
+                kind = 'Demo mode' if connected and isinstance(self.controller, MockNE501Controller) else 'Real pump connection' if connected else 'Offline planning'
                 running = ', '.join(f'P{p.index}' for p in self.panels.values() if p.running and p.last_status is not None) or '—'
-                self.execution_label.setText(f'{kind} | Reported running: {running}')
+                running_text = f'Demo pumps running: {running}' if connected and isinstance(self.controller, MockNE501Controller) else f'Reported running: {running}'
+                self.execution_label.setText(f'{kind} | {running_text}')
+                unconfirmed = ', '.join(f'P{p.index}' for p in self.panels.values() if (p.running and p.last_status is None) or p.stop_pending)
+                if unconfirmed:
+                    self.execution_label.setText(self.execution_label.source_text + f' | Stop unconfirmed: {unconfirmed}')
                 unknown = ', '.join(f'P{p.index}' for p in self.panels.values() if p.last_status is None)
                 if connected and unknown:
                     self.execution_label.setText(self.execution_label.source_text + f' | State unknown: {unknown}')
@@ -269,7 +273,7 @@ class MainWindow(WorkflowController, QMainWindow):
         connected=self.controller is not None and self.controller.is_connected
         selected=self.panels.get(getattr(self,'selected_address',self.addresses[0]))
         if selected is not None:
-            mode='Simulation' if isinstance(self.controller,MockNE501Controller) else 'Connected pumps' if connected else 'Manual setup'
+            mode='Demo mode' if connected and isinstance(self.controller,MockNE501Controller) else 'Connected pumps' if connected else 'Manual setup'
             self.workflow_banner.setText(f'{mode} | Pump {selected.index} | Address {selected.address:02d} | '+selected.next_instruction())
         panels=self.active_panels()
         can_apply=connected and bool(panels) and all(not p.configuration_blocker() for p in panels)
@@ -369,7 +373,7 @@ class MainWindow(WorkflowController, QMainWindow):
 
         for device, description in ports:
             self.port_combo.addItem(f"{device} — {description}", device)
-        self.port_combo.addItem("Simulation mode (no hardware)", "MOCK")
+        self.port_combo.addItem("Demo mode (virtual pumps)", "MOCK")
 
         index = self.port_combo.findData(selected)
         if index < 0:
@@ -401,7 +405,7 @@ class MainWindow(WorkflowController, QMainWindow):
             self.preparation.reset_session()
             self._prep_verified.clear()
             self.settings.setValue("last_port", port)
-            self.connection_label.setText(f"● Connected {port}")
+            self.connection_label.setText('● Demo mode' if isinstance(controller, MockNE501Controller) else f"● Connected {port}")
             self.connection_label.setObjectName("onlineStatus")
             self.connection_label.style().unpolish(self.connection_label)
             self.connection_label.style().polish(self.connection_label)

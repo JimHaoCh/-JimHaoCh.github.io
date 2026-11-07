@@ -169,7 +169,7 @@ class Workflow(QWidget):
         self.mapping_note.setObjectName('secondaryLabel')
         self.mapping_note.setWordWrap(True)
         layout.addWidget(self.mapping_note)
-        demo = Button('Load example workflow (simulation)')
+        demo = Button('Load example workflow')
         demo.clicked.connect(self.owner.load_example_workflow)
         layout.addWidget(demo)
         layout.addStretch()
@@ -341,8 +341,8 @@ class Workflow(QWidget):
         self.review_write.setObjectName('applyButton')
         self.review_start = Button('Start reviewed pumps')
         self.review_start.setObjectName('runButton')
-        self.review_check = Button('Check simulation flow')
-        self.review_play = Button('Play simulation')
+        self.review_check = Button('Check timeline')
+        self.review_play = Button('Preview flow')
         self.review_write.clicked.connect(self.owner.write_review)
         self.review_start.clicked.connect(self.owner.start_review)
         self.review_check.clicked.connect(self.owner.check_review_flow)
@@ -373,19 +373,19 @@ class Workflow(QWidget):
             blocker = QSignalBlocker(self.mode_selector)
             self.mode_selector.setCurrentIndex(owner.mode_tabs.currentIndex())
             del blocker
-            for i, text in enumerate(('Manual Control', 'Timeline simulation')):
+            for i, text in enumerate(('Manual Control', 'Timeline Editor')):
                 self.mode_selector.setTabText(i, tr(text))
             self.mode_selector.setAccessibleName(tr('Operation mode'))
-            labels = ('1 Connect & map', '2 Syringes', '3 Manual priming', '4 Manual settings', '5 Review & start') if manual else ('1 Pumps & paths', '2 Syringes', '', '3 Timeline editor', '4 Check & simulate')
+            labels = ('1 Connect & map', '2 Syringes', '3 Manual priming', '4 Manual settings', '5 Review & start') if manual else ('1 Pumps & paths', '2 Syringes', '', '3 Timeline editor', '4 Check & preview')
             self.steps[2].setVisible(manual)
             owner.connection_controls.setVisible(manual)
             self.mapping_check.setVisible(manual)
             mapping = self.stack.widget(0)
             mapping.title_label.setText('Connect pumps and match the fluid paths' if manual else 'Choose pumps and name their fluid paths')
-            mapping.note_label.setText('Choose the pumps used in this experiment. Match each address to its physical pump and chip inlet.' if manual else 'Plan offline: choose the pumps, fluid names and inlets used by the timeline.')
+            mapping.note_label.setText('Choose the pumps used in this experiment. Match each address to its physical pump and chip inlet.' if manual else 'Choose the pumps, fluids and inlets for the timeline. Offline editing is available.')
             self.mapping_note.setText('User confirmation · connection alone does not confirm the tubing layout.' if manual else 'Add any initial priming as timeline blocks. Every included block contributes to the delivery totals.')
             self.syringe_note.setText('Entered = plan value. Read back = confirmed in this connection. Writing settings keeps the motor stopped.' if manual else 'Timeline planning uses the entered diameters. Device writes and priming are available in Manual mode.')
-            self.stack.widget(4).title_label.setText('Review targets and delivery before starting' if manual else 'Review the timeline before simulation')
+            self.stack.widget(4).title_label.setText('Review targets and delivery before starting' if manual else 'Review the timeline before preview')
             self.stack.widget(4).note_label.setText('Plan values, user confirmations and device read-backs are listed separately.' if manual else 'Check pump paths, syringe diameters and the total delivery from all included blocks.')
             complete = [
                 bool(targets) and (not manual or prep.mapping_confirmed and bool(owner.controller and owner.controller.is_connected)
@@ -495,7 +495,7 @@ class Workflow(QWidget):
                 withdrawn = sum(c.volume_ul for c in clips if c.direction == 'WDR')
                 delivery = tr('Infuse') + f': {infused:.5g} µL\n' + tr('Withdraw') + f': {withdrawn:.5g} µL'
                 extra = '—'
-                confirmation = tr('Simulation checked' if timeline.checked and timeline.plan_ready() and not timeline.pending() else 'Simulation check pending')
+                confirmation = tr('Flow checked' if timeline.checked and timeline.plan_ready() and not timeline.pending() else 'Flow check pending')
             else:
                 direction = tr('Infuse' if settings.direction == 'INF' else 'Withdraw')
                 from .pump_panel import RATE_LABELS
@@ -521,8 +521,8 @@ class Workflow(QWidget):
         self.review_start.setText(f'Start reviewed pumps ({len(addresses)})')
         self.review_check.setEnabled(bool(simulation and owner.can_use_timeline() and timeline and timeline.plan_ready() and not timeline.busy() and not timeline.pending()))
         self.review_play.setEnabled(bool(simulation and timeline and timeline.can_start_preview()))
-        self.review_play.setText('Resume simulation' if timeline and timeline.paused else 'Play simulation')
+        self.review_play.setText('Resume preview' if timeline and timeline.paused else 'Preview flow')
         if simulation:
-            self.review_note.setText('All included timeline blocks, including initial priming, count toward the totals. Playback is simulation only.')
+            self.review_note.setText('All included blocks count toward the totals. Preview playback sends no pump start commands.')
         else:
             self.review_note.setText('Immediate priming is started in step 3. Optional startup Prime starts with the reviewed pumps. Start sends RUN to the listed pumps.')

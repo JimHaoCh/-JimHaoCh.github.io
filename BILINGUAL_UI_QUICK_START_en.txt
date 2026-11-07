@@ -1,19 +1,17 @@
-NE-501 v1.4.1 quick start
+NE-501 v1.4.2 quick start
 
-Choose the mode above the step bar.
-Manual Control: 1 Connect & map > 2 Syringes > 3 Manual priming > 4 Manual settings > 5 Review & start.
-Timeline simulation: 1 Pumps & paths > 2 Syringes > 3 Timeline editor > 4 Check & simulate.
+Choose Manual Control or Timeline Editor above the step bar.
+Manual Control: connect/map > syringes > optional manual priming > manual settings > review/start.
+Timeline Editor: pumps/paths > syringes > timeline editor > check/preview.
 
-Manual: connect real pumps or the mock controller, select the pumps used, and confirm physical addresses/inlet connections. Enter the actual syringe inside diameters in mm. In step 3 check clamping, tubing and outlet/valve routing; confirm preparation or explicitly skip it. Optional finite priming has separate write, start and stop actions. Configure formal delivery, review the target pumps, write/read back settings, then explicitly start the listed pumps.
+Connection category and editing function are separate. Demo mode connects virtual pumps. Offline planning has no controller connection. Real pump connection identifies an open real controller connection; individual responses establish device status. Loading an example workflow changes planning data and leaves the controller category unchanged.
 
-Immediate priming runs in manual step 3. Optional startup Prime runs when the reviewed program starts. Review both quantities. Every DIA/program rewrite invalidates previous program proof before dispatch, including failed writes. A diameter recheck alone cannot rearm old priming settings.
+Timeline playback is called Flow preview and sends no pump start commands. Author any initial preparation as timeline blocks; all included blocks contribute to the totals. Independent priming and device program writes remain in Manual Control. A blank or unsaved filename is Untitled workflow.
 
-Timeline: plan offline, choose pumps/paths, enter diameters, and author blocks. Include any initial preparation directly as blocks. The four-column review counts every included block in the total delivery. Check the flow, then play the simulation. Device writes and independent priming are restricted to Manual Control.
+A rewrite of DIA or program settings invalidates the previous program proof before dispatch. Review manual targets and volume stages, write/read back settings, then explicitly start the listed pumps. Immediate manual priming and optional startup Prime have different execution times.
 
-Unapplied block and duration drafts survive mode switches and shared preparation updates. Single-pump review guidance follows the listed targets. Timeline editor and review playback share locks while pumps run, await STOP, or commands are in progress.
+Unapplied timeline drafts survive switching to manual control. Single-pump review guidance follows the listed targets. Editor and review preview share running/pending-command locks. Disconnecting without confirming STOP retains an unconfirmed-stop indicator.
 
-Stop all remains in the top bar, cancels simulation and sends STOP to all configured addresses. Confirm each pump response. Warning windows leave the main window accessible.
+Stop all stops the preview and sends STOP to every configured address. An active configuration batch finishes before the queued STOP worker; command-level cancellation is a recommended follow-up. The demo controller acknowledges commands and does not yet advance finite delivery or Prime phases by elapsed time.
 
-Shared syringe plans, selected tracks, fluid/inlet names and timeline blocks are saved in JSON. Manual delivery values and user/device confirmations belong to the current session. Imported files require a new preparation check; device proof is never imported.
-
-Windows x64 and Windows 11 ARM64 share the installer. See BILINGUAL_MANUAL_UI_v1.4.1.md and UI_REVIEW_v1.4.1.md for details. Timeline playback is simulation only. Actual delivery, tubing behavior and pump synchronization need hardware measurements.
+See BILINGUAL_MANUAL_UI_v1.4.2.md and UI_REVIEW_v1.4.2.md. Windows x64 and Windows 11 ARM64 share the installer. Actual delivery, tubing and synchronization require hardware measurements.
