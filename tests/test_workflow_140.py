@@ -204,6 +204,12 @@ class WorkflowUITests(unittest.TestCase):
 
     def test_planning_navigation_and_simulation_send_no_device_commands(self):
         self.ready((0,))
+        self.assertTrue(self.win.panels[1].isHidden())
+        with patch.object(self.win.controller, 'send_command', wraps=self.win.controller.send_command) as sent:
+            self.win.show_unused_checkbox.setChecked(True)
+            self.assertFalse(self.win.panels[1].isHidden())
+            self.win.show_unused_checkbox.setChecked(False)
+            sent.assert_not_called()
         self.win.timeline_editor._load_model(example_timeline())
         with patch.object(self.win.controller, 'send_command', wraps=self.win.controller.send_command) as sent:
             for step in range(5):

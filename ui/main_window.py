@@ -76,7 +76,11 @@ class MainWindow(WorkflowController, QMainWindow):
             panel.set_diameter_requested.connect(self.set_diameter);panel.apply_requested.connect(self.apply_single)
             panel.run_requested.connect(self.review_single);panel.stop_requested.connect(self.stop_single)
             panel.edit_requested.connect(self.select_pump);panel.state_changed.connect(self.refresh_group_controls)
-        dashboard=QWidget();dashboard_layout=QVBoxLayout(dashboard);dashboard_layout.setContentsMargins(0,0,0,0);dashboard_layout.addLayout(panel_grid);dashboard_layout.addStretch();dashboard.setMinimumWidth(500)
+        dashboard=QWidget();dashboard_layout=QVBoxLayout(dashboard);dashboard_layout.setContentsMargins(0,0,0,0)
+        self.show_unused_checkbox=QCheckBox('Show pumps outside this experiment')
+        self.show_unused_checkbox.toggled.connect(self.refresh_group_controls)
+        dashboard_layout.addWidget(self.show_unused_checkbox)
+        dashboard_layout.addLayout(panel_grid);dashboard_layout.addStretch();dashboard.setMinimumWidth(500)
         self.panel_scroll=QScrollArea();self.panel_scroll.setWidgetResizable(True);self.panel_scroll.setWidget(dashboard)
         self.panel_scroll.viewport().installEventFilter(self)
         self.editor_scroll=QScrollArea();self.editor_scroll.setWidgetResizable(True);self.editor_scroll.setWidget(self.editor_stack)
@@ -214,8 +218,15 @@ class MainWindow(WorkflowController, QMainWindow):
         self._refreshing_workflow = True
         try:
             if hasattr(self, 'workflow'):
+                used = self.preparation.used_addresses()
+                self.show_unused_checkbox.setVisible(len(used) < len(self.addresses))
+                if used and self.selected_address not in used and not self.show_unused_checkbox.isChecked():
+                    self.select_pump(used[0])
                 for address, panel in self.panels.items():
                     plan = self.preparation.plans[address]
+                    panel.setVisible(plan.used or self.show_unused_checkbox.isChecked() or panel.running or panel.stop_pending or panel.online and panel.last_status in (None, 'A'))
+                    if not plan.used and panel.is_active():
+                        panel.set_active(False)
                     panel.update_shared_plan(plan.used, plan.diameter, self.preparation.physical_blocker(address), address in self._diameter_pending)
                     identity = self.workflow.identity(address)
                     panel.editor_title.setText(identity)

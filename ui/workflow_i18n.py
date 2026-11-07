@@ -1,5 +1,6 @@
 """Traditional Chinese / English copy for the shared preparation workflow."""
 WORKFLOW_TEXT = [
+('Show pumps outside this experiment', '展開本次未用的幫浦'),
 ('Off', '關閉'),
 ('Select online pumps with entered syringe plans.', '選取已連線、已填內徑且納入本次使用的幫浦。'),
 ('Device verification failed.', '設備回讀驗證失敗。'),

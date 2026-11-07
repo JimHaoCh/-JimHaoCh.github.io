@@ -51,6 +51,7 @@ class PumpPanel(GroupBox):
         self.address = address
         self.index = index if index is not None else address + 1
         self.workflow_managed = False
+        self.workflow_used = True
         self.planned_diameter = None
         self.external_start_blocker = ""
         self.external_plan_pending = False
@@ -731,6 +732,7 @@ class PumpPanel(GroupBox):
         self._refresh_summary()
 
     def update_shared_plan(self, used, diameter, blocker, pending=False):
+        self.workflow_used = used
         self.external_plan_pending = pending
         changed = self.planned_diameter != diameter
         self.planned_diameter = diameter
@@ -766,7 +768,7 @@ class PumpPanel(GroupBox):
             widget.setEnabled(editable and prime_on)
         group_ready = self.online and self.planned_diameter is not None and not self.external_start_blocker.startswith("Select") if self.workflow_managed else ready
         self.active_checkbox.setEnabled(group_ready and not self.busy)
-        writable = can_set and self.planned_diameter is not None and not self.external_plan_pending if self.workflow_managed else configure
+        writable = can_set and self.workflow_used and self.planned_diameter is not None and not self.external_plan_pending if self.workflow_managed else configure
         self.apply_button.setEnabled(writable and not self.input_errors())
         if self.workflow_managed:
             self.apply_button.setText("Write & verify")
