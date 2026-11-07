@@ -37,6 +37,8 @@ class MainWindow(WorkflowController, QMainWindow):
         self._prep_verified = {}
         self._syncing_preparation = False
         self._refreshing_workflow = False
+        self._timeline_allowed = None
+        self._timeline_plan_ready = None
         self.thread_pool=QThreadPool.globalInstance();self.thread_pool.setMaxThreadCount(1)
         self.csv_logger=CsvCommandLogger()
         self.settings=settings if settings is not None else QSettings('NE501Controller','NE501 Timeline UI Preview')
@@ -112,6 +114,7 @@ class MainWindow(WorkflowController, QMainWindow):
         manual.addWidget(self.workflow_banner);self.workflow_banner.hide();manual.addWidget(self.manual_splitter,1);manual.addLayout(selection);manual.addLayout(actions)
         manual.addWidget(self.diagnostics_checkbox);manual.addWidget(self.log_view)
         self.mode_tabs=QTabWidget();self.mode_tabs.addTab(manual_page,'')
+        self.mode_tabs.tabBar().hide()
         self.timeline_editor=None
         from .timeline_editor import TimelineEditor
         if len(self.addresses)==4:
@@ -150,6 +153,8 @@ class MainWindow(WorkflowController, QMainWindow):
             from ne501.timeline_model import Timeline
             self.timeline_editor._load_model(Timeline(addresses=self.addresses))
             self.timeline_editor.external_setup = True
+            self.timeline_editor.operation_allowed = self.can_use_timeline
+            self.timeline_editor.plan_ready = lambda: not any(a in self._diameter_pending for a in self.preparation.used_addresses())
             self.timeline_editor.syringe_button.hide()
             self.timeline_editor.plan_changed.connect(self.sync_preparation_from_timeline)
             self.timeline_editor.project_loaded.connect(self.reset_experiment_confirmation)
@@ -179,10 +184,11 @@ class MainWindow(WorkflowController, QMainWindow):
         if self.timeline_editor is not None:self.timeline_editor.canvas.update()
         self.refresh_group_controls()
     def _mode_changed(self,index):
-        self.connection_controls.setVisible(True)
-        if hasattr(self, 'workflow'):
-            self.refresh_group_controls()
         if self.timeline_editor is not None and index!=1 and self.timeline_editor.running:self.timeline_editor.pause_preview()
+        if hasattr(self, 'workflow'):
+            if index == 1 and self.workflow.step == 2:
+                self.workflow.show_step(3)
+            self.refresh_group_controls()
         QTimer.singleShot(0,self.update_dashboard_density)
 
     def resizeEvent(self,event):
@@ -245,7 +251,13 @@ class MainWindow(WorkflowController, QMainWindow):
                 connected = self.controller is not None and self.controller.is_connected
                 self.emergency_button.setEnabled(bool(connected and self.task_gate.ordinary_ticket() is not None or timeline and timeline.busy()))
                 if timeline:
-                    timeline.setEnabled(not self.pending_tasks and not any(p.running for p in self.panels.values()))
+                    allowed = self.can_use_timeline()
+                    plan_ready = timeline.plan_ready()
+                    timeline.setEnabled(allowed)
+                    if allowed != self._timeline_allowed or plan_ready != self._timeline_plan_ready:
+                        self._timeline_allowed = allowed
+                        self._timeline_plan_ready = plan_ready
+                        timeline.update_controls()
                 panels = self.active_panels()
                 self.apply_active_button.setEnabled(bool(panels) and all(self.can_write_panel(p) and self.preparation.plans[p.address].diameter is not None and not p.input_errors() and p.address not in self._diameter_pending for p in panels))
                 self.workflow.refresh()
@@ -471,11 +483,16 @@ class MainWindow(WorkflowController, QMainWindow):
         self.run_task(action, success, panels=list(self.panels.values()))
 
     def set_diameter(self, address: int, diameter_mm: float) -> None:
+        if not self.manual_mode():
+            return
         if not self.update_preparation(address, used=True, diameter=diameter_mm):
             return
         if not self.require_connection():
             return
         panel = self.panels[address]
+        if not self.can_write_panel(panel):
+            return
+        self.invalidate_program_confirmation(address)
 
         def action():
             return self.controller.set_diameter(address, diameter_mm)
@@ -533,6 +550,8 @@ class MainWindow(WorkflowController, QMainWindow):
         self.run_task(lambda:stop_all_independently(self.controller,[address]),self.present_stop_report,panels=[panel],priority=50)
 
     def run_single_command(self, address: int, command: str, panel: PumpPanel) -> None:
+        if command.startswith('RUN') and not self.manual_mode():
+            return
         def action():
             return self.controller.send_command(address, command)
 
@@ -727,6 +746,7 @@ class MainWindow(WorkflowController, QMainWindow):
             # A failed command does not establish the pump's physical state.
             # Require a new scan and diameter verification before another RUN.
             panel.set_online(False)
+            self._prep_verified.pop(panel.address, None)
             panel.status_label.setText("● STATUS UNCONFIRMED")
             panel.version_label.setText("Check pump and rescan")
             panel.set_last_response(f"Error：{message}")

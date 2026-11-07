@@ -11,6 +11,22 @@ QWidget#setupCard {{
     border-radius: {px(10)}px;
 }}
 QWidget#setupCard > QLabel {{ background: transparent; }}
+QTabBar#modeSelector::tab {{
+    background: #293442;
+    color: #d5e7ff;
+    border: 1px solid #6888b2;
+    border-radius: {px(7)}px;
+    min-height: {px(24)}px;
+    padding: {px(2)}px {px(14)}px;
+    font-size: {pt(11)};
+    font-weight: 700;
+}}
+QTabBar#modeSelector::tab:selected {{
+    background: #24486d;
+    border: 2px solid #ffd166;
+    color: #ffffff;
+}}
+QTabBar#modeSelector::tab:focus {{ border-color: #ffd166; }}
 QLabel#pageTitle {{ font-size: {pt(15)}; font-weight: 800; color: #f4f8ff; }}
 QLabel#cardTitle {{ font-size: {pt(11)}; font-weight: 700; color: #d5e7ff; }}
 QLabel#diameterHeading {{ font-size: {pt(12)}; font-weight: 800; color: #ffffff; }}

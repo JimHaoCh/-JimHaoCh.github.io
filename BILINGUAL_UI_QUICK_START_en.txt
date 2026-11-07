@@ -1,15 +1,19 @@
-NE-501 v1.4.0 quick start
+NE-501 v1.4.1 quick start
 
-1 Connect & map: connect real pumps or the mock controller, select pumps used in this experiment, and verify physical addresses and inlet paths.
-2 Syringes: enter actual inside diameters in mm. New plans start blank. Entered values and current device read-backs have separate labels.
-3 Tubing: confirm preparation, explicitly skip this time, or set up finite priming with a positive rate and volume. Write and start priming separately.
-4 Operation: choose manual delivery or timeline simulation. Set full units, direction and continuous/target mode. Startup Prime remains available under Advanced.
-5 Review & start: inspect the listed targets and volume stages. Write/read back manual settings, then explicitly start the reviewed pumps. Timeline playback is simulation only.
+Choose the mode above the step bar.
+Manual Control: 1 Connect & map > 2 Syringes > 3 Manual priming > 4 Manual settings > 5 Review & start.
+Timeline simulation: 1 Pumps & paths > 2 Syringes > 3 Timeline editor > 4 Check & simulate.
 
-Review buttons open the summary without moving pumps. Stop all remains in the top bar, cancels simulation and sends STOP to all configured addresses. Confirm each pump response. Warning windows leave the main window accessible.
+Manual: connect real pumps or the mock controller, select the pumps used, and confirm physical addresses/inlet connections. Enter the actual syringe inside diameters in mm. In step 3 check clamping, tubing and outlet/valve routing; confirm preparation or explicitly skip it. Optional finite priming has separate write, start and stop actions. Configure formal delivery, review the target pumps, write/read back settings, then explicitly start the listed pumps.
 
-Shared syringe plans, selected tracks, fluid/inlet names and timeline blocks are saved in JSON. Manual delivery values and user/device confirmations belong to the current session. Imported files require a new preparation check; they never supply device read-back proof.
+Immediate priming runs in manual step 3. Optional startup Prime runs when the reviewed program starts. Review both quantities. Every DIA/program rewrite invalidates previous program proof before dispatch, including failed writes. A diameter recheck alone cannot rearm old priming settings.
 
-Existing timeline drag, resize, split, copy, snapping, zoom, shortcuts, undo/redo, JSON, language and UI-size controls remain available. Unused tracks retain blocks and are skipped during simulation.
+Timeline: plan offline, choose pumps/paths, enter diameters, and author blocks. Include any initial preparation directly as blocks. The four-column review counts every included block in the total delivery. Check the flow, then play the simulation. Device writes and independent priming are restricted to Manual Control.
 
-Windows x64 and Windows 11 ARM64 share the installer. See BILINGUAL_MANUAL_UI_v1.4.0.md and UI_REVIEW_v1.4.0.md for details and validation limits. Actual flow, tubing behavior and pump synchronization need hardware measurements.
+Unapplied block and duration drafts survive mode switches and shared preparation updates. Single-pump review guidance follows the listed targets. Timeline editor and review playback share locks while pumps run, await STOP, or commands are in progress.
+
+Stop all remains in the top bar, cancels simulation and sends STOP to all configured addresses. Confirm each pump response. Warning windows leave the main window accessible.
+
+Shared syringe plans, selected tracks, fluid/inlet names and timeline blocks are saved in JSON. Manual delivery values and user/device confirmations belong to the current session. Imported files require a new preparation check; device proof is never imported.
+
+Windows x64 and Windows 11 ARM64 share the installer. See BILINGUAL_MANUAL_UI_v1.4.1.md and UI_REVIEW_v1.4.1.md for details. Timeline playback is simulation only. Actual delivery, tubing behavior and pump synchronization need hardware measurements.

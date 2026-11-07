@@ -172,12 +172,28 @@ def run_smoke_test(report_path: Path) -> int:
     window.workflow.prep_volume.setValue(5)
     window.workflow.prep_write.click()
     wait_until(lambda: window.pending_tasks == 0 and window.workflow.prep_start.isEnabled(), 'bounded priming write/read-back')
+    window.workflow.mode_selector.setCurrentIndex(1)
+    if sum(button.isVisible() for button in window.workflow.steps) != 4 or window.workflow.step != 3:
+        raise RuntimeError('Timeline mode must have four steps and omit manual priming')
+    window.write_preparation()
+    window.start_preparation()
+    if window.pending_tasks or window.controller.pumps[0].status != 'S':
+        raise RuntimeError('Manual priming must be unavailable in timeline mode')
+    window.show_workflow_step(4)
+    if window.workflow.review_table.columnCount() != 4:
+        raise RuntimeError('Timeline review must omit manual volume stages')
+    window.workflow.mode_selector.setCurrentIndex(0)
+    window.show_workflow_step(2)
     window.workflow.prep_start.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.running, 'explicit priming start')
     window.workflow.prep_stop.click()
     wait_until(lambda: window.pending_tasks == 0 and not panel.running, 'priming stop')
     if panel.settings_applied:
         raise RuntimeError('Priming must not arm the main delivery')
+    window.set_diameter(0, 10)
+    wait_until(lambda: window.pending_tasks == 0, 'same-diameter rewrite')
+    if window.workflow.prep_start.isEnabled():
+        raise RuntimeError('A diameter rewrite must invalidate the old priming verification')
     for language in ('zh_TW', 'en'):
         manager.set_language(language)
         for step in range(5):
@@ -200,6 +216,8 @@ def run_smoke_test(report_path: Path) -> int:
         "guided_manual_workflow": True,
         "shared_preparation": True,
         "bounded_priming": True,
+        "mode_specific_workflow": True,
+        "stale_priming_proof_rejected": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")

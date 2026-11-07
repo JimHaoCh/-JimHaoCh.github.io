@@ -54,6 +54,10 @@ class TimelineEditor(QWidget):
         self.device_diameters = {}
         self.dirty = self.duration_dirty = self.loading = False
         self.running = self.paused = False
+        # The containing application supplies its operation gate. Standalone
+        # simulation remains independent of any device controller.
+        self.operation_allowed = lambda: True
+        self.plan_ready = lambda: True
         self.playhead = 0.0
         self.zoom = 1.0
         self.started_at = self.started_tick = 0.0
@@ -292,8 +296,8 @@ class TimelineEditor(QWidget):
     def _track_from_combo(self, index):
         self.canvas.active_track = index; self.canvas.update()
 
-    def set_preparation(self, diameters, used, names, inlets):
-        if self.busy() or self.pending():
+    def set_preparation(self, diameters, used, names, inlets, *, preserve_draft=False):
+        if self.busy() or self.pending() and not preserve_draft:
             self.show_notice('Finish or cancel the current edit before changing preparation.')
             return False
         candidate = self.model.copy()
@@ -301,7 +305,18 @@ class TimelineEditor(QWidget):
         if candidate.to_json() != self.model.to_json():
             self.remember()
             self.model = candidate
-            self.after_change('Preparation plan updated.')
+            if self.pending():
+                # Shared metadata changes must not reload the inspector: its
+                # uncommitted text, partial numbers and duration are a draft.
+                self.checked = False
+                self.canvas.model = self.model
+                self.canvas.update()
+                self.refresh_syringe_preview()
+                self.show_notice('Shared setup updated; timeline draft retained. Check the flow again.')
+                self.plan_changed.emit()
+                self.update_controls()
+            else:
+                self.after_change('Preparation plan updated.')
         return True
 
     def set_device_diameters(self, values):
@@ -556,7 +571,12 @@ class TimelineEditor(QWidget):
         self.duration_dirty = False; self.show_notice('已取消總長度修改。'); self.update_controls()
 
     def check_flow(self):
-        if self.busy() or self.pending(): return
+        if not self.operation_allowed() or self.busy() or self.pending(): return
+        if not self.plan_ready():
+            self.checked = False
+            self.show_notice('Finish entering a valid inside diameter.')
+            self.update_controls()
+            return
         try:
             self.model.validate()
             if not self.model.included_clips(): raise ValueError('請先新增至少一個區塊。')
@@ -575,8 +595,12 @@ class TimelineEditor(QWidget):
     def return_to_start(self):
         self.stop_preview(); self.seek(0)
 
+    def can_start_preview(self):
+        return bool(self.operation_allowed() and not self.running and not self.pending()
+                    and self.plan_ready() and self.checked and self.model.included_clips())
+
     def start_preview(self):
-        if self.running or self.pending() or not self.checked or not self.model.clips: return
+        if not self.can_start_preview(): return
         if self.playhead >= self.model.total: self.playhead = 0
         self.running = True; self.paused = False
         self.started_at = time.monotonic(); self.started_tick = self.playhead
@@ -752,8 +776,8 @@ class TimelineEditor(QWidget):
         has_clip = self.model.get(self.canvas.selected) is not None
         self.canvas.editable = not busy and not pending
         self.canvas.seek_enabled = not self.running and not pending
-        self.check_button.setEnabled(not busy and not pending and not missing and bool(self.model.included_clips()))
-        self.play_button.setEnabled(not self.running and not pending and self.checked and bool(self.model.included_clips()))
+        self.check_button.setEnabled(self.operation_allowed() and self.plan_ready() and not busy and not pending and not missing and bool(self.model.included_clips()))
+        self.play_button.setEnabled(self.can_start_preview())
         self.play_button.setText('Resume simulation' if self.paused else 'Play simulation')
         self.pause_button.setEnabled(self.running); self.stop_button.setEnabled(busy)
         self.home_button.setEnabled(not pending and (busy or self.playhead > 0))
