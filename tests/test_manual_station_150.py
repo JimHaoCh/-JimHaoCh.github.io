@@ -375,10 +375,12 @@ class ManualStationTests(unittest.TestCase):
 
     def test_all_four_start_stop_controls_stay_visible_at_1024_and_130_percent(self):
         self.ready((0,1,2,3));w=self.win;w.show_workflow_step(3)
+        self.write(0,1,2,3);w.run_single(0);self.idle();w.select_pump(1)
         shots=Path(__file__).resolve().parents[1]/'builds/ui-shots-source';shots.mkdir(parents=True,exist_ok=True)
         for language in ('zh_TW','en'):
             manager.set_language(language)
             for scale in (1.,1.3):
+                w.ui_scale_combo.setCurrentIndex(w.ui_scale_combo.findData(scale))
                 self.app.setStyleSheet(build_stylesheet(scale))
                 for width in (1024,1366):
                     w.resize(width,768);self.app.processEvents();w.update_dashboard_density();self.app.processEvents()
@@ -390,10 +392,14 @@ class ManualStationTests(unittest.TestCase):
                             self.assertTrue(viewport.rect().contains(point),(language,scale,width,point))
                             self.assertLessEqual(point.y()+button.height(),viewport.height())
                             self.assertLessEqual(point.x()+button.width(),viewport.width())
+                    p=w.panels[w.selected_address]
+                    for button in (p.apply_button,p.editor_run_button,p.editor_stop_button,w.run_active_button):
+                        caption=button.text().replace('&','')
+                        self.assertLessEqual(button.fontMetrics().horizontalAdvance(caption)+12,button.width(),(language,scale,width,caption))
                     if width==1366:w.grab().save(str(shots/f'station-{language}-{round(scale*100)}.png'))
-        self.prime();w.panels[0].priming_control.toggle.setChecked(True)
-        manager.set_language('zh_TW');self.app.setStyleSheet(build_stylesheet(1.));w.resize(1366,768);self.app.processEvents()
-        w.editor_scroll.ensureWidgetVisible(w.panels[0].priming_control.start,12,12);self.app.processEvents()
+        self.prime(1);self.write(1);w.panels[1].priming_control.toggle.setChecked(True)
+        manager.set_language('zh_TW');w.ui_scale_combo.setCurrentIndex(w.ui_scale_combo.findData(1.));self.app.setStyleSheet(build_stylesheet(1.));w.resize(1366,768);self.app.processEvents()
+        w.editor_scroll.ensureWidgetVisible(w.panels[1].priming_control.start,12,12);self.app.processEvents()
         w.grab().save(str(shots/'station-priming-zh_TW-100.png'))
 
 

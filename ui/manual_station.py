@@ -31,7 +31,7 @@ class PrimingControl(QWidget):
         self.volume = panel.prime_volume_input; self.volume.setMinimum(0); self.volume.setValue(0)
         self.volume.setSpecialValueText(tr('Enter volume'))
         self.volume_unit = panel.prime_volume_unit_combo
-        self.follow = CheckBox('Continue with formal delivery after priming')
+        self.follow = CheckBox('Then start formal delivery')
         self.rate_info = Label(); self.rate_info.setWordWrap(True)
         self.start = Button('Start priming only'); self.start.setObjectName('runButton')
         self.notice = Label(); self.notice.setWordWrap(True); self.notice.setObjectName('secondaryLabel')
@@ -189,7 +189,7 @@ class ManualStationController:
             is_formal=panel.station_context=='formal' or panel.station_context=='priming_chain' and phase==1
             paused=panel.last_status=='P' and is_formal and panel.settings_applied
             panel.run_button.setText('Resume' if paused else 'Start')
-            panel.editor_run_button.setText('Resume delivery' if paused else 'Start formal delivery' if panel.current_settings().continuous else 'Start a new dose')
+            panel.editor_run_button.setText('Resume delivery' if paused else 'Start delivery' if panel.current_settings().continuous else 'Start a new dose')
             panel.new_dose_button.setVisible(paused and not panel.current_settings().continuous)
             panel.new_dose_button.setEnabled(not self.manual_start_blocker(address))
             if panel.last_status=='P':panel.status_label.setText('● Stopped · progress retained')

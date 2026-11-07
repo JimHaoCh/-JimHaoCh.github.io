@@ -806,7 +806,7 @@ class PumpPanel(GroupBox):
         self.apply_button.setEnabled(writable and not self.input_errors())
         if self.workflow_managed:
             self.apply_button.setText("Write & verify")
-            self.editor_run_button.setText('Start formal delivery' if self.station_managed else 'Review this pump')
+            self.editor_run_button.setText('Start delivery' if self.station_managed else 'Review this pump')
             self.editor_run_button.setObjectName('runButton' if self.station_managed else 'secondaryButton')
         apply_style = 'secondaryButton' if self.settings_applied else 'applyButton'
         if self.apply_button.objectName() != apply_style:

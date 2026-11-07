@@ -306,7 +306,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         self.group_fix_button.setEnabled(connected and not self.pending_tasks)
         if details:self.group_fix_button.setToolTip(details[0])
         self.apply_active_button.setText(f'Apply selected ({count})')
-        self.run_active_button.setText(f'Start / resume selected ({count})')
+        self.run_active_button.setText(f'Start / resume ({count})')
         self.run_active_button.setObjectName('runButton')
         self.stop_active_button.setText(f'Stop selected ({count})')
         self.apply_active_button.setStyleSheet('border: 2px solid #ffd166;' if can_apply and not can_run else '')

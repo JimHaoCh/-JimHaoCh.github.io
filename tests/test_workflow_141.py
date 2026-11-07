@@ -61,6 +61,10 @@ class ModeWorkflowTests(unittest.TestCase):
         self.win.controller = MockNE501Controller([0, 1, 2, 3], latency=0)
         self.win.controller.connect()
         self.win._set_group_buttons_enabled(True)
+        self.win.connection_label.setText('● Demo mode')
+        self.win.connection_label.setObjectName('onlineStatus')
+        self.win.connection_label.style().unpolish(self.win.connection_label)
+        self.win.connection_label.style().polish(self.win.connection_label)
         for panel in self.win.panels.values():
             panel.set_online(True)
             panel.update_from_status('S')
