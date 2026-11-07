@@ -384,15 +384,11 @@ class ManualStationTests(unittest.TestCase):
         self.assertFalse(w.panels[1].settings_applied);self.assertTrue(w.panels[1].online)
         self.assertIn('Write interrupted by STOP',w.panels[1].last_response_source)
 
-    def test_inline_syringe_drawer_stays_on_console_and_shares_model(self):
+    def test_syringe_edit_entry_opens_the_single_step2_input(self):
         self.ready();w=self.win;w.show_workflow_step(3);w.open_station_setup(0)
-        drawer=w.panels[0].inline_setup
-        self.assertTrue(drawer.toggle.isChecked());self.assertEqual(w.workflow.step,3)
-        drawer.diameter.setValue(4.699);drawer.diameter.editingFinished.emit()
-        self.assertEqual(w.preparation.plans[0].diameter,4.699)
-        self.assertEqual(w.workflow.diameter_inputs[0].value(),4.699)
-        drawer.tubing.setCurrentIndex(drawer.tubing.findData('done'))
-        self.assertEqual(w.preparation.tubing[0],'done')
+        self.assertEqual(w.workflow.step,1)
+        self.assertTrue(w.workflow.diameter_inputs[0].hasFocus())
+        self.assertFalse(hasattr(w.panels[0],'inline_setup'))
 
     def test_cancel_example_preserves_mode_page_and_draft(self):
         self.ready();w=self.win;w.show_workflow_step(3)

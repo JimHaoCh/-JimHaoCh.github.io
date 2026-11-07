@@ -74,6 +74,8 @@ def main() -> int:
 def run_smoke_test(report_path: Path) -> int:
     import serial
     from serial.tools import list_ports
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
 
     app = QApplication([sys.argv[0]])
     app.setApplicationName("NE501 Multi Pump Controller")
@@ -152,11 +154,19 @@ def run_smoke_test(report_path: Path) -> int:
     window.workflow.mapping_check.setChecked(True)
     for address in window.preparation.used_addresses():
         window.change_tubing(address, 'skipped')
-    window.show_workflow_step(3)
     window.select_pump(0)
     panel = window.panels[0]
-    panel.set_diameter_button.click()
-    wait_until(lambda: window.pending_tasks == 0 and panel.confirmed_diameter is not None, 'diameter verification')
+    window.show_workflow_step(1)
+    diameter = window.workflow.diameter_inputs[0]
+    diameter.setFocus();diameter.selectAll()
+    QTest.keyClicks(diameter,'4.699')
+    if diameter.text()!='4.699':raise RuntimeError('Typed diameter was overwritten')
+    QTest.mouseClick(window.workflow.diameter_buttons[0],Qt.MouseButton.LeftButton)
+    wait_until(lambda: window.pending_tasks == 0 and panel.confirmed_diameter == 4.699, 'typed step-2 diameter verification')
+    window.change_tubing(0,'skipped')
+    window.show_workflow_step(3)
+    if hasattr(panel,'inline_setup') or not panel.diameter_input.isReadOnly():
+        raise RuntimeError('The manual console must have one read-only syringe summary')
     panel.apply_button.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.settings_applied, 'fixed-footer apply and read-back')
     panel.editor_run_button.click()
@@ -170,8 +180,11 @@ def run_smoke_test(report_path: Path) -> int:
     panel.stop_button.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'P', 'card stop')
     window.change_tubing(0, 'needed')
-    window.workflow.prep_rate.setValue(10)
-    window.workflow.prep_volume.setValue(5)
+    panel.priming_control.mode.setCurrentIndex(1)
+    window.workflow.prep_rate.setFocus();window.workflow.prep_rate.selectAll()
+    QTest.keyClicks(window.workflow.prep_rate,'10')
+    window.workflow.prep_volume.setFocus();window.workflow.prep_volume.selectAll()
+    QTest.keyClicks(window.workflow.prep_volume,'5')
     window.workflow.prep_write.click()
     wait_until(lambda: window.pending_tasks == 0 and window.workflow.prep_start.isEnabled(), 'bounded priming write/read-back')
     window.workflow.mode_selector.setCurrentIndex(1)
@@ -188,10 +201,15 @@ def run_smoke_test(report_path: Path) -> int:
     window.show_workflow_step(3)
     window.workflow.prep_start.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.running, 'explicit priming start')
+    label=panel.target_label.source_text;panel.refresh_age()
+    if label!=panel.target_label.source_text or not label.startswith('Priming:'):
+        raise RuntimeError('Age refresh overwrote the priming-stage display')
     window.workflow.prep_stop.click()
     wait_until(lambda: window.pending_tasks == 0 and not panel.running, 'priming stop')
     if not window.manual_start_blocker(0):
         raise RuntimeError('Formal delivery requires user confirmation of tubing after priming')
+    panel.setup_summary.confirm_ready.click()
+    if window.manual_start_blocker(0):raise RuntimeError('Same-page tubing completion failed')
     window.set_diameter(0, 10)
     wait_until(lambda: window.pending_tasks == 0, 'same-diameter rewrite')
     if window.workflow.prep_start.isEnabled():
@@ -204,6 +222,10 @@ def run_smoke_test(report_path: Path) -> int:
             window.grab().save(str(report_path.parent / f'workflow-step{step + 1}-{language}.png'))
     window.controller.disconnect()
     window.controller = None
+    # These fixture edits intentionally exercised plan changes; leave no save
+    # dialog for the unattended packaged-startup check.
+    timeline.saved_snapshot = timeline.model.to_json()
+    timeline.dirty = timeline.duration_dirty = False
     QTimer.singleShot(300, app.quit)
     exit_code = app.exec()
     if exit_code:
@@ -223,6 +245,10 @@ def run_smoke_test(report_path: Path) -> int:
         "same_page_start_stop_resume": True,
         "manual_stages": 3,
         "unified_explicit_priming": True,
+        "keyboard_diameter": True,
+        "keyboard_priming": True,
+        "single_diameter_entry": True,
+        "stage_label_retained": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")

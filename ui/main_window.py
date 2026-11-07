@@ -324,18 +324,13 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             self.workflow.mapping_check.setFocus()
             return
         if self.preparation.plans[address].diameter is None or address in self._diameter_pending:
-            if self.manual_mode() and self.workflow.step==3:
-                self.open_station_setup(address)
-                panel.inline_setup.diameter.setFocus()
-                return
-            self.show_workflow_step(1)
-            self.workflow.diameter_inputs[address].setFocus()
+            self.open_station_setup(address)
             return
         if self.preparation.tubing[address] not in ('done', 'skipped'):
             if self.manual_mode() and self.workflow.step==3:
-                self.open_station_setup(address)
-                panel.inline_setup.tubing.setFocus()
-                return
+                if panel.setup_summary.confirm_ready.isVisible():
+                    panel.setup_summary.confirm_ready.setFocus()
+                    return
             self.show_workflow_step(2)
             self.workflow.tubing_choices[address][1].setFocus()
             return
@@ -347,6 +342,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             self.refresh_status_button.setFocus()
             return
         target=panel.focus_next_step()
+        if target is None:return
         if panel.editor.isAncestorOf(target):
             QTimer.singleShot(0,lambda:self.editor_scroll.ensureWidgetVisible(target,12,12))
     def _set_group_buttons_enabled(self,enabled):
@@ -497,7 +493,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
                 panel = self.panels[address]
                 if response is None:
                     panel.set_online(False)
-                    self.csv_logger.write(address, "VER", error="No response")
+                    self.record_command(address, "VER", error="No response")
                     self.append_log(f"Pump {address:02d}：No response")
                     continue
                 panel.set_online(True, response.data or "Online")
@@ -619,7 +615,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         self.append_log("EMERGENCY STOP ALL")
         self.append_log('Queued commands cancelled; STOP follows the current command response.')
         panels = list(self.panels.values())
-        for panel in panels: panel.set_stop_pending()
+        for panel in panels: panel.set_stop_pending(reset=True)
         controller = self.controller
 
         def action():
@@ -636,6 +632,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             panel = self.panels.get(address)
             if panel is not None:
                 panel.set_online(True)
+                panel.update_from_status('S')
                 panel.set_last_response("STOP confirmed by pump response")
         if report.unconfirmed:
             details = []
@@ -644,7 +641,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
                 panel = self.panels.get(address)
                 if panel is not None:
                     panel.set_online(False)
-                    panel.set_stop_pending()
+                    panel.set_stop_pending(reset=True)
                     panel.status_label.setText("● STOP NOT CONFIRMED")
                     panel.version_label.setText("Check pump")
                     panel.set_last_response(f"STOP not confirmed: {reason}")
@@ -697,16 +694,27 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
 
     def process_results(self, results) -> None:
         for address, command, response in results:
-            self.log_response(address, command, response)
             panel = self.panels.get(address)
             if panel is not None:
                 panel.update_from_status(response.status)
                 panel.set_last_response(self.describe_response(response))
+            self.log_response(address, command, response)
 
     def log_response(self, address: int, command: str, response: PumpResponse) -> None:
-        self.csv_logger.write(address, command, response=response)
+        self.record_command(address, command, response=response)
         message = f"TX {address:02d} {command} | RX {self.describe_response(response)}"
         self.append_log(message)
+
+    def record_command(self, address, command, *, response=None, error=''):
+        try:
+            self.csv_logger.write(address, command, response=response, error=error)
+        except OSError as exc:
+            self.append_log(f'Command log unavailable: {exc}')
+            if not getattr(self, '_log_failure_reported', False):
+                self._log_failure_reported = True
+                self.show_nonmodal_warning('Command log unavailable', 'Device responses remain visible. Check the log folder and free disk space.')
+        else:
+            self._log_failure_reported = False
 
     def describe_response(self, response: PumpResponse) -> str:
         parts = [response.status_label]

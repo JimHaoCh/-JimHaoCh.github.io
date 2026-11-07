@@ -211,15 +211,7 @@ class MockNE501Controller(NE501Controller):
         return NE501Controller.configure_program(self, address, settings)
 
     def stop_pump(self, address: int):
-        status = self.send_command(address, "")
-        results = [(address, "STATUS", status)]
-        if status.status == "S" and status.ok:
-            return results
-        first = self.send_command(address, "STP")
-        results.append((address, "STP", first))
-        if first.status == "P" and first.ok:
-            results.append((address, "STP", self.send_command(address, "STP")))
-        return results
+        return NE501Controller.stop_pump(self, address)
 
     def stop_all(self, addresses: Iterable[int]):
         results = []

@@ -71,6 +71,7 @@ class PumpPanel(GroupBox):
         self.checked_at = 0.0
         self.last_response_source = ''
         self.stop_pending = False
+        self.stop_requires_reset = False
         self.setTitle(f'Pump {self.index} | Address {address:02d}')
         self.setObjectName('pumpPanel')
         self.setMinimumWidth(240)
@@ -366,8 +367,7 @@ class PumpPanel(GroupBox):
         if self.confirmed_diameter is None:
             self.open_diameter_editor()
             if self.station_managed:
-                self.inline_setup.diameter.setFocus()
-                return self.inline_setup.diameter
+                return None
             return self.diameter_input
         errors = self.input_errors()
         if errors:
@@ -504,7 +504,6 @@ class PumpPanel(GroupBox):
             self.version_label.setToolTip(version)
         if not online:
             self.last_status = None
-            self.stop_pending = False
             self.version_label.setText('No response')
             self.invalidate_diameter('Pump offline — diameter verification required')
         self._repolish_status_widgets()
@@ -514,8 +513,9 @@ class PumpPanel(GroupBox):
         self.busy = busy
         self._refresh_enabled_state()
 
-    def set_stop_pending(self):
+    def set_stop_pending(self, *, reset=False):
         self.stop_pending = True
+        self.stop_requires_reset = self.stop_requires_reset or reset
         self._refresh_enabled_state()
 
     def confirm_diameter(self, diameter_mm):
@@ -585,8 +585,9 @@ class PumpPanel(GroupBox):
             self.last_checked = datetime.now().strftime('%H:%M:%S')
             self.checked_at = time.monotonic()
             self.running = status in {'I', 'W', 'X'}
-            if status == 'S':
+            if status == 'S' or status == 'P' and not self.stop_requires_reset:
                 self.stop_pending = False
+                self.stop_requires_reset = False
             if status == 'A':
                 self.invalidate_diameter('Alarm — check pump, stop and refresh status')
                 self.status_label.setObjectName('warningLabel')
@@ -678,17 +679,21 @@ class PumpPanel(GroupBox):
         self.validation_label.setVisible(bool(errors))
 
     def _refresh_summary(self):
-        status_style = 'warningLabel' if self.online and self.last_status in (None, 'A') else 'onlineStatus' if self.online else 'offlineStatus'
+        status_style = 'warningLabel' if self.stop_pending or self.online and self.last_status in (None, 'A') else 'onlineStatus' if self.online else 'offlineStatus'
         if self.status_label.objectName() != status_style:
             self.status_label.setObjectName(status_style)
             self.status_label.style().unpolish(self.status_label)
             self.status_label.style().polish(self.status_label)
-        if self.last_status == 'A':
+        if self.stop_pending:
+            self.status_label.setText('● STOP NOT CONFIRMED' if self.last_status is None else 'Stop pending — awaiting response')
+        elif self.last_status == 'A':
             self.status_label.setText('● Alarm')
         elif self.online and self.last_status is None:
             self.status_label.setText('● STATUS UNCONFIRMED')
         elif self.running and self.online:
             self.status_label.setText('● Running')
+        elif self.online and self.last_status == 'P':
+            self.status_label.setText('● Stopped · progress retained')
         elif self.online:
             self.status_label.setText('● Ready' if not self.start_blocker() else '● Online')
         else:
@@ -702,6 +707,11 @@ class PumpPanel(GroupBox):
             volume_unit = dict((c, l) for l, c in VOLUME_UNITS)[settings.prime_volume_unit]
             mode = f'Prime: {settings.prime_volume:g} {volume_unit} → {mode}'
         self.mode_label.setText(mode)
+        prime = getattr(self, 'station_priming_settings', None)
+        if (self.station_managed and prime is not None and self.last_status in ('I','W','X','P')
+                and self.station_context in ('priming','priming_chain') and self.station_phase != 1):
+            self.target_label.setText(f'Priming: {prime.rate:.5g} {RATE_LABELS[prime.rate_unit]}')
+            self.mode_label.setText('Priming then formal delivery' if prime.follow_delivery else 'Priming only')
         self.target_label.setToolTip(self.mode_label.source_text)
         card_guidance = self.readiness()
         if self._compact and self._group_notice:
@@ -721,11 +731,7 @@ class PumpPanel(GroupBox):
             group_hint = 'Verify diameter to enable group selection.'
         self.group_hint_label.setText(group_hint)
         self.group_hint_label.setVisible(bool(group_hint) and not self._compact)
-        if self.last_checked is None:
-            self.last_check_label.setText('No confirmed status yet')
-        else:
-            age = max(0, int(time.monotonic() - self.checked_at))
-            self.last_check_label.setText(f'Last checked: {self.last_checked} ({age} s ago)')
+        self._refresh_age_label()
         self.motion_label.setVisible(not self._compact)
         self.mode_label.setVisible(not self._compact)
         self.last_check_label.setVisible(not self._compact)
@@ -759,7 +765,14 @@ class PumpPanel(GroupBox):
                 label.style().polish(label)
 
     def refresh_age(self):
-        self._refresh_summary()
+        self._refresh_age_label()
+
+    def _refresh_age_label(self):
+        if self.last_checked is None:
+            self.last_check_label.setText('No confirmed status yet')
+        else:
+            age = max(0, int(time.monotonic() - self.checked_at))
+            self.last_check_label.setText(f'Last checked: {self.last_checked} ({age} s ago)')
 
     def update_shared_plan(self, used, diameter, blocker, pending=False):
         self.workflow_used = used

@@ -113,8 +113,14 @@ def write_manual_program(controller, address, formal, priming=None):
                    prime_rate_ml_hr=rate_to_ml_hr(actual_rate, actual_unit))
 
 
-def hold_motor(controller, address):
+def hold_motor(controller, address, *, reset=False):
     """Confirm motor stationary while preserving native paused progress."""
+    if reset:
+        results = controller.stop_pump(address)
+        if not results:return results, None
+        _, command, status = results[-1]
+        valid = status.ok or command=='STP' and status.error_code=='NA'
+        return results, status if valid and status.status=='S' else None
     results=[]
     try:
         status=controller.send_command(address,'')

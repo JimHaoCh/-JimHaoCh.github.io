@@ -399,10 +399,14 @@ class NE501Controller:
     def stop_pump(self, address: int) -> list[tuple[int, str, PumpResponse]]:
         """Stop and reset the program without false ?NA on an idle pump."""
         results: list[tuple[int, str, PumpResponse]] = []
-        status_response = self.status(address)
-        results.append((address, "STATUS", status_response))
-        if status_response.ok and status_response.status == "S":
-            return results
+        try:
+            status_response = self.status(address)
+            results.append((address, "STATUS", status_response))
+            if status_response.ok and status_response.status == "S":
+                return results
+        except (PumpTimeoutError, PumpConnectionError):
+            # A failed query must still be followed by an addressed STOP attempt.
+            pass
         response = self.send_command(address, "STP")
         results.append((address, "STP", response))
         if self._stop_result_ok("STP", response) and response.status == "P":

@@ -7,7 +7,8 @@ from .i18n_widgets import Label, Button, ComboBox, CheckBox, SpinBox, MessageBox
 from .i18n import tr
 from .unit_fields import preserve_quantity
 from ne501.syringe import FLOW_UL_MIN, format_diameter
-from ne501.controller import CommandCancelled, prime_rate_ml_hr
+from ne501.controller import CommandCancelled, prime_rate_ml_hr, choose_program_volume_unit
+from ne501.pump_numbers import normalize_rate
 from ne501.manual_program import PrimingSettings, ManualProof, write_manual_program, hold_motor
 
 
@@ -16,6 +17,7 @@ class PrimingControl(QWidget):
         super().__init__()
         self.owner, self.panel = owner, panel
         self.pending = False
+        self.validation_error = ''
         box = QVBoxLayout(self); box.setContentsMargins(0, 4, 0, 4)
         self.toggle = CheckBox('Priming / purge')
         box.addWidget(self.toggle)
@@ -64,6 +66,15 @@ class PrimingControl(QWidget):
         self.pending = not self.volume.hasAcceptableInput() or self.mode.currentData()=='CUSTOM' and not self.custom_rate.hasAcceptableInput()
         self.owner.refresh_group_controls()
 
+    def commit_input(self):
+        fields = [self.volume] + ([self.custom_rate] if self.mode.currentData()=='CUSTOM' else [])
+        if all(field.hasAcceptableInput() for field in fields):
+            for field in fields:field.interpretText()
+            self.pending = False
+        self.validation_error = ''
+        try:self.snapshot()
+        except ValueError as exc:self.validation_error = str(exc)
+
     def snapshot(self):
         diameter = self.owner.preparation.plans[self.panel.address].diameter
         if self.pending or diameter is None or not self.volume.hasAcceptableInput() or self.volume.value()<=0:
@@ -79,8 +90,6 @@ class PrimingControl(QWidget):
 
     def refresh(self):
         p = self.panel
-        self.custom_rate.setSpecialValueText(tr('Enter rate'))
-        self.volume.setSpecialValueText(tr('Enter volume'))
         editable = self.owner.manual_mode() and not p.running and not p.busy and not p.stop_pending
         preset = self.mode.currentData()=='PRESET'
         self.panel.prime_speed_combo.setVisible(preset)
@@ -88,7 +97,10 @@ class PrimingControl(QWidget):
         for widget in (self.mode,self.panel.prime_speed_combo,self.custom_rate,self.rate_unit,
                        self.volume,self.volume_unit,self.direction,self.follow):
             widget.setEnabled(editable)
-        settings = self.snapshot()
+        self.validation_error = ''
+        try:settings = self.snapshot()
+        except ValueError as exc:
+            settings = None;self.validation_error = str(exc)
         if settings:
             from .pump_panel import RATE_LABELS
             self.rate_info.setText(f'Priming: {settings.rate:.5g} {RATE_LABELS[settings.rate_unit]} · {settings.volume:g} {"µL" if settings.volume_unit=="UL" else "mL"}')
@@ -101,36 +113,29 @@ class PrimingControl(QWidget):
         self.notice.setText(blocker or 'Priming is explicit. Formal start and resume never repeat priming.')
 
 
-class InlineSetup(QWidget):
-    def __init__(self,owner,panel):
-        super().__init__(); self.owner,self.panel=owner,panel
-        layout=QVBoxLayout(self); layout.setContentsMargins(0,0,0,0)
-        self.toggle=CheckBox('Syringe / tubing setup')
-        layout.addWidget(self.toggle)
-        self.body=QWidget(); box=QVBoxLayout(self.body);box.setContentsMargins(4,4,4,4)
-        self.diameter=SpinBox();self.diameter.setDecimals(3);self.diameter.setRange(0,50);self.diameter.setSpecialValueText(tr('Enter diameter'))
-        self.diameter.setSuffix(' mm');self.diameter.setObjectName('syringeValue')
-        box.addWidget(Label('Syringe inside diameter d (mm)'));box.addWidget(self.diameter)
-        self.tubing=ComboBox()
-        for text,code in (('Choose preparation status','pending'),('Connected · needs priming','needed'),
-                          ('Tubing checked · ready','done'),('Skip priming · user confirmed','skipped')):
-            self.tubing.addItem(text,code)
-        box.addWidget(self.tubing)
-        self.status=Label();self.status.setWordWrap(True);box.addWidget(self.status)
-        layout.addWidget(self.body);self.body.hide();self.toggle.toggled.connect(self.body.setVisible)
-        self.diameter.lineEdit().textEdited.connect(lambda *_:owner.diameter_text_pending(panel.address))
-        self.diameter.editingFinished.connect(lambda:owner.commit_diameter(panel.address,self.diameter))
-        self.tubing.currentIndexChanged.connect(lambda *_:owner.change_tubing(panel.address,self.tubing.currentData()))
+class SetupSummary(QWidget):
+    """Read-only hardware summary; all syringe inputs live in step 2."""
+    def __init__(self, owner, panel):
+        super().__init__(); self.owner, self.panel = owner, panel
+        box = QVBoxLayout(self); box.setContentsMargins(0, 0, 0, 4)
+        box.addWidget(panel.diameter_status)
+        panel.change_diameter_button.setText('Edit syringe & tubing in step 2')
+        box.addWidget(panel.change_diameter_button)
+        self.tubing_status = Label(); self.tubing_status.setWordWrap(True)
+        box.addWidget(self.tubing_status)
+        self.confirm_ready = Button('Priming checked · tubing ready')
+        self.confirm_ready.clicked.connect(lambda: owner.change_tubing(panel.address, 'done'))
+        box.addWidget(self.confirm_ready)
 
     def refresh(self):
-        a=self.panel.address;owner=self.owner
-        self.diameter.setSpecialValueText(tr('Enter diameter'))
-        if not self.diameter.hasFocus() and a not in owner._diameter_pending:
-            blocker=QSignalBlocker(self.diameter);self.diameter.setValue(owner.preparation.plans[a].diameter or 0);del blocker
-        blocker=QSignalBlocker(self.tubing);self.tubing.setCurrentIndex(self.tubing.findData(owner.preparation.tubing[a]));del blocker
-        editable=not self.panel.running and not self.panel.busy and not self.panel.stop_pending
-        self.diameter.setEnabled(editable);self.tubing.setEnabled(editable)
-        self.status.setText(owner.preparation.physical_blocker(a) or 'Tubing checked · ready')
+        p, owner = self.panel, self.owner
+        choice = owner.preparation.tubing[p.address]
+        text = {'pending':'Choose preparation status', 'needed':'Connected · needs priming',
+                'done':'Tubing checked · ready', 'skipped':'Skip priming · user confirmed'}[choice]
+        self.tubing_status.setText(text)
+        finished = p.station_context in ('priming', 'priming_chain') and p.last_status in ('P', 'S')
+        self.confirm_ready.setVisible(choice == 'needed' and finished)
+        self.confirm_ready.setEnabled(owner.manual_mode() and not p.busy and not p.stop_pending)
 
 
 class ManualStationController:
@@ -141,9 +146,11 @@ class ManualStationController:
             panel.station_managed=True
             panel.station_context=None
             panel.station_phase=None
-            panel.inline_setup=InlineSetup(self,panel)
+            panel.station_priming_settings=None
+            panel.setup_summary=SetupSummary(self,panel)
+            panel.diameter_input.setReadOnly(True)
             panel.priming_control=PrimingControl(self,panel)
-            panel.editor.layout().insertWidget(3,panel.inline_setup)
+            panel.editor.layout().insertWidget(3,panel.setup_summary)
             panel.editor.layout().insertWidget(6,panel.priming_control)
             panel.new_dose_requested.connect(lambda a:self.start_station(a,fresh=True))
             panel.shared_setup_requested.disconnect()
@@ -153,15 +160,16 @@ class ManualStationController:
 
     def open_station_setup(self,address):
         self.select_pump(address)
-        if self.manual_mode() and self.workflow.step==3:
-            self.panels[address].inline_setup.toggle.setChecked(True)
-            self.editor_scroll.ensureWidgetVisible(self.panels[address].inline_setup)
-        else:
-            self.show_workflow_step(1)
+        self.show_workflow_step(1)
+        spin = self.workflow.diameter_inputs[address]
+        spin.setFocus()
+        self.workflow.stack.widget(1).ensureWidgetVisible(spin)
 
     def station_prime_snapshot(self,address):
         try:return self.panels[address].priming_control.snapshot()
-        except ValueError:return None
+        except ValueError as exc:
+            self.panels[address].priming_control.validation_error=str(exc)
+            return None
 
     def station_priming_blocker(self,address):
         if not self.manual_mode():return 'Switch to Manual mode to operate pumps.'
@@ -171,7 +179,7 @@ class ManualStationController:
         if not self.preparation.mapping_confirmed:return 'Confirm the pump-to-inlet mapping.'
         if self.preparation.tubing[address]=='pending':return 'Confirm syringe clamping, tubing and the outlet before priming.'
         snapshot=self.station_prime_snapshot(address)
-        if snapshot is None:return 'Enter a priming rate and finite target volume when needed.'
+        if snapshot is None:return panel.priming_control.validation_error or 'Enter a priming rate and finite target volume when needed.'
         proof=self.station_proofs.get(address)
         if not self.diameter_matches_plan(address) or not proof or proof.priming!=snapshot:
             return 'Write and read back the priming settings first.'
@@ -182,7 +190,7 @@ class ManualStationController:
     def refresh_station(self):
         if not getattr(self,'station_ready',False):return
         for address,panel in self.panels.items():
-            panel.priming_control.refresh();panel.inline_setup.refresh()
+            panel.priming_control.refresh();panel.setup_summary.refresh()
             formal_ready=not self.manual_start_blocker(address)
             panel.run_button.setEnabled(formal_ready);panel.editor_run_button.setEnabled(formal_ready)
             phase=panel.station_phase
@@ -192,14 +200,6 @@ class ManualStationController:
             panel.editor_run_button.setText('Resume delivery' if paused else 'Start delivery' if panel.current_settings().continuous else 'Start a new dose')
             panel.new_dose_button.setVisible(paused and not panel.current_settings().continuous)
             panel.new_dose_button.setEnabled(not self.manual_start_blocker(address))
-            if panel.last_status=='P':panel.status_label.setText('● Stopped · progress retained')
-            if panel.running and panel.station_context in ('priming','priming_chain') and phase!=1:
-                proof=self.station_proofs.get(address)
-                if proof and proof.priming:
-                    from .pump_panel import RATE_LABELS
-                    p=proof.priming
-                    panel.target_label.setText(f'Priming: {p.rate:.5g} {RATE_LABELS[p.rate_unit]}')
-                    panel.mode_label.setText('Priming then formal delivery' if p.follow_delivery else 'Priming only')
 
     def write_station_programs(self,panels,overrides=None):
         if not self.manual_mode() or not panels:return
@@ -210,8 +210,19 @@ class ManualStationController:
             settings=(overrides or {}).get(a) or panel.validated_settings()
             if settings is None:return
             settings=replace(settings,prime_enabled=False)
+            panel.priming_control.commit_input()
             prime=self.station_prime_snapshot(a)
-            plans.append((a,settings,self.build_program_settings(panel,settings),prime,plan))
+            program=self.build_program_settings(panel,settings)
+            try:
+                normalize_rate(program.rate,program.rate_unit)
+                if panel.priming_control.validation_error:
+                    raise ValueError(panel.priming_control.validation_error)
+                combined=replace(program,prime_enabled=True,prime_volume=prime.volume,prime_volume_unit=prime.volume_unit) if prime else program
+                choose_program_volume_unit(combined)
+            except ValueError as exc:
+                self.show_nonmodal_warning('Invalid Settings',str(exc));return
+            plans.append((a,settings,program,prime,plan))
+        generations={p.address:self._pump_generation.get(p.address,0) for p in panels}
         for a,*_ in plans:self.invalidate_program_confirmation(a)
         controller=self.controller
         def action():
@@ -227,7 +238,10 @@ class ManualStationController:
             return results
         def success(results):
             saved={a:(s,p,prime,plan) for a,s,p,prime,plan in plans}
+            completed=set()
             for a,diameter,result,error in results:
+                completed.add(a)
+                if self._pump_generation.get(a,0)!=generations[a]:continue
                 panel=self.panels[a];settings,program,prime,plan=saved[a]
                 if error=='CANCELLED':
                     panel.set_last_response('Write interrupted by STOP; write and verify again.')
@@ -242,6 +256,7 @@ class ManualStationController:
                     panel.confirm_diameter(program.diameter_mm)
                     panel.mark_settings_applied();panel.set_program_confirmation(result)
                     self.station_proofs[a]=ManualProof(settings,prime,program)
+                    panel.station_priming_settings=prime
                     if prime:
                         self._prep_verified[a]=(a,prime)
                         self.preparation.preparation_amounts[a]=(prime.volume,prime.volume_unit)
@@ -250,8 +265,12 @@ class ManualStationController:
                     panel.invalidate_diameter('Device settings changed or verification failed.')
                     if error:panel.set_online(False)
                     self.show_nonmodal_warning('Write result',error or (result.message if result else 'Device verification failed.'))
+            if any(item[3]=='CANCELLED' for item in results):
+                for a in saved:
+                    if a not in completed and self._pump_generation.get(a,0)==generations[a]:
+                        self.panels[a].set_last_response('Not sent after STOP request')
             self.refresh_group_controls()
-        self.run_task(action,success,panels=panels)
+        self.run_task(action,success,panels=panels,allow_partial=True)
 
     def start_station(self,address,fresh=False,priming=False):
         self.start_station_group([self.panels[address]],fresh=fresh,priming=priming)
@@ -307,6 +326,8 @@ class ManualStationController:
                 panel=self.panels[a]
                 if kind:
                     panel.station_context=kind;panel.station_phase=3 if priming else 1
+                    proof=self.station_proofs.get(a)
+                    panel.station_priming_settings=proof.priming if proof else None
                     if kind=='priming':self.preparation.confirm_tubing(a,'needed')
                 self.process_results(results)
                 if error:
@@ -323,6 +344,7 @@ class ManualStationController:
         if not self.controller or not self.controller.is_connected or not addresses:return
         self._packet_epoch+=1
         panels=[self.panels[a] for a in addresses]
+        reset_addresses={p.address for p in panels if p.stop_requires_reset}
         for p in panels:
             self._pump_generation[p.address]=self._pump_generation.get(p.address,0)+1
             p.set_stop_pending()
@@ -331,7 +353,7 @@ class ManualStationController:
             outcomes=[]
             for a in addresses:
                 try:
-                    results,status=hold_motor(controller,a);outcomes.append([a,results,status,None])
+                    results,status=hold_motor(controller,a,reset=a in reset_addresses);outcomes.append([a,results,status,None])
                 except CommandCancelled:break
                 except Exception as exc:outcomes.append([a,[],None,str(exc)])
             # Query progress only after every requested motor has been stopped.
@@ -347,7 +369,6 @@ class ManualStationController:
             for a,results,status,error in outcomes:
                 panel=self.panels[a];self.process_results(results)
                 if status:
-                    panel.stop_pending=False
                     for _,command,response in results:
                         if command=='PHN' and response.ok and response.data.strip().isdigit():panel.station_phase=int(response.data)
                     panel.set_last_response('Motor stopped · progress retained' if status.status=='P' else 'STOP confirmed by pump response')

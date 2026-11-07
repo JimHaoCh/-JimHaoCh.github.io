@@ -31,6 +31,7 @@ class WorkflowController:
             self.station_proofs.pop(address,None)
             self.panels[address].station_context=None
             self.panels[address].station_phase=None
+            self.panels[address].station_priming_settings=None
         self.panels[address].mark_settings_dirty()
 
     def show_nonmodal_warning(self, title, text):
@@ -76,7 +77,7 @@ class WorkflowController:
                     return f'P{index}: refresh status before continuing.', 0
                 if panel.last_status == 'A':
                     return f'P{index}: alarm reported; inspect and stop the pump.', 0
-                if panel.running or panel.stop_pending:
+                if panel.stop_pending:
                     return f'P{index}: running or awaiting STOP; use the stop controls.', 3
             if not self.preparation.mapping_confirmed:
                 return 'Next: confirm the pump-to-inlet mapping.', 0
@@ -205,6 +206,14 @@ class WorkflowController:
         self._diameter_pending.add(address)
         self.panels[address].mark_settings_dirty()
         self.refresh_group_controls()
+
+    def diameter_input_valid(self, address):
+        spin = self.workflow.diameter_inputs[address]
+        if not spin.hasAcceptableInput():return False
+        try:
+            format_diameter(spin.valueFromText(spin.text()))
+        except ValueError:return False
+        return True
 
     def commit_diameter(self, address, spin):
         try:

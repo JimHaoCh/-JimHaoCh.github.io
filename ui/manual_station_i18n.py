@@ -1,8 +1,14 @@
 """Copy for the three-stage manual console."""
 MANUAL_STATION_TEXT = [
+('Edit syringe & tubing in step 2', '回步驟 2 修改針筒與管路'),
+('Priming checked · tubing ready', '已確認排氣／預充完成，管路就緒'),
+('Command log unavailable', '指令紀錄無法寫入'),
+('Command log unavailable: {msg0}', '指令紀錄無法寫入：{msg0}'),
+('Device responses remain visible. Check the log folder and free disk space.', '設備回覆與停止結果仍會顯示。請檢查紀錄資料夾與可用磁碟空間。'),
 ('2 Syringe & tubing', '2 針筒與管路'),
 ('3 Manual console', '3 手動操作台'),
 ('Syringe & tubing', '針筒與管路'),
+('Syringe clamping, tubing and outlet check', '針筒固定、管路與出口確認'),
 ('Syringe / tubing setup', '針筒／管路設定'),
 ('Editing P{raw0} · Start and stop each pump on its card.', '正在設定 P{raw0}；各台啟動／停止按鈕位於幫浦卡片。'),
 ('Use the pump cards to start, resume or stop. Write changed settings before starting.', '各台幫浦可在卡片啟動、續跑或停止。修改參數後，請先寫入並回讀。'),

@@ -386,7 +386,6 @@ class Workflow(QWidget):
                 widget.setVisible(plan.used)
                 identity.setText(self.identity(address))
                 spin = self.diameter_inputs[address]
-                spin.setSpecialValueText(tr('Enter diameter'))
                 spin.setAccessibleName(tr('Syringe inside diameter d (mm)'))
                 if not spin.hasFocus() and address not in owner._diameter_pending:
                     blocker = QSignalBlocker(spin)
@@ -403,7 +402,7 @@ class Workflow(QWidget):
                 else:
                     status.setText(f'Plan entered: {plan.diameter:g} mm · device confirmation pending' if manual else f'Timeline diameter: {plan.diameter:g} mm')
                 self.diameter_buttons[address].setVisible(manual)
-                self.diameter_buttons[address].setEnabled(plan.used and plan.diameter is not None and owner.can_write_panel(panel))
+                self.diameter_buttons[address].setEnabled(plan.used and owner.diameter_input_valid(address) and owner.can_write_panel(panel))
                 label, choice = self.tubing_choices[address]
                 label.setText(self.identity(address))
                 label.setVisible(plan.used)

@@ -92,7 +92,30 @@ class SpinBox(Tooltip, W.QDoubleSpinBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setKeyboardTracking(False)
-        manager.changed.connect(self._translate_tip)
+        self._special_source = ''
+        manager.changed.connect(self._retranslate_spin)
+    def setSpecialValueText(self, text):
+        self._special_source = str(text)
+        self._retranslate_spin()
+    def _retranslate_spin(self):
+        self._translate_tip()
+        translated = tr(self._special_source)
+        previous = self.specialValueText()
+        if translated == previous:
+            return
+        line = self.lineEdit()
+        raw, cursor = line.text(), line.cursorPosition()
+        start, length = line.selectionStart(), len(line.selectedText())
+        modified = line.isModified()
+        preserve = raw != previous and (self.hasFocus() or line.hasFocus() or modified)
+        super().setSpecialValueText(translated)
+        if preserve:
+            line.setText(raw)
+            if start >= 0:
+                line.setSelection(start + length, -length) if cursor == start else line.setSelection(start, length)
+            else:
+                line.setCursorPosition(cursor)
+            line.setModified(modified)
     def wheelEvent(self, event):
         event.ignore()
 
