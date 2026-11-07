@@ -353,7 +353,8 @@ class Workflow(QWidget):
             prep = owner.preparation
             used = prep.used_addresses()
             complete = [
-                bool(used) and prep.mapping_confirmed,
+                bool(used) and prep.mapping_confirmed and bool(owner.controller and owner.controller.is_connected)
+                and all(owner.panels[a].online and owner.panels[a].last_status not in (None, 'A') for a in used),
                 bool(used) and all(prep.plans[a].diameter is not None and a not in owner._diameter_pending for a in used),
                 bool(used) and all(prep.tubing[a] in ('done', 'skipped') for a in used),
                 bool(owner.timeline_editor and owner.timeline_editor.model.included_clips()) if owner.mode_tabs.currentIndex() == 1 else bool(used) and all(not owner.panels[a].input_errors() for a in used),
@@ -431,6 +432,7 @@ class Workflow(QWidget):
             self.next_hint.setText(hint)
             self.next_button.setText('Go to required step' if target_step != self.step else 'Locate required field')
             self.next_button.setVisible(self.step != 4 or target_step != 4)
+            self.next_button.setEnabled(not owner.pending_tasks)
         finally:
             self.updating = False
 

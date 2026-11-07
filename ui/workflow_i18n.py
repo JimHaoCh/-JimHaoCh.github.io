@@ -1,5 +1,10 @@
 """Traditional Chinese / English copy for the shared preparation workflow."""
 WORKFLOW_TEXT = [
+('Commands in progress · wait for the device response.', '正在傳送指令，請等待設備回應。'),
+('P{raw0}: no response; check the connection and rescan.', 'P{raw0}：尚無回應，請檢查連線並重新偵測。'),
+('P{raw0}: refresh status before continuing.', 'P{raw0}：請先更新設備狀態。'),
+('P{raw0}: alarm reported; inspect and stop the pump.', 'P{raw0}：設備回報警報，請現場確認並停止幫浦。'),
+('P{raw0}: running or awaiting STOP; use the stop controls.', 'P{raw0}：正在運轉或等待停止，請使用停止操作。'),
 ('Show pumps outside this experiment', '展開本次未用的幫浦'),
 ('Off', '關閉'),
 ('Select online pumps with entered syringe plans.', '選取已連線、已填內徑且納入本次使用的幫浦。'),

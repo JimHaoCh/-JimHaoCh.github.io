@@ -172,6 +172,21 @@ class WorkflowUITests(unittest.TestCase):
         self.assertFalse(self.win.preparation.mapping_confirmed)
         self.assertEqual(self.win.workflow.step, 3)
 
+    def test_next_step_orders_real_setup_and_routes_device_failures(self):
+        self.win.update_preparation(0, used=True)
+        self.assertEqual(self.win.workflow_hint()[1], 0)
+        self.ready((0,))
+        self.win.update_preparation(0, diameter=None)
+        self.assertEqual(self.win.workflow_hint()[1], 1)
+        self.win.update_preparation(0, diameter=4.699)
+        self.assertEqual(self.win.workflow_hint()[1], 2)
+        self.win.change_tubing(0, 'done')
+        self.assertEqual(self.win.workflow_hint()[1], 3)
+        self.win.panels[0].set_online(False)
+        self.assertEqual(self.win.workflow_hint()[1], 0)
+        self.win.follow_workflow_hint()
+        self.assertEqual(self.win.workflow.step, 0)
+
     def test_typing_diameter_and_shared_metadata_invalidates_only_affected_pump(self):
         self.ready()
         self.win.write_review()

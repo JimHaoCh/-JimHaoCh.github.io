@@ -34,20 +34,38 @@ class WorkflowController:
         used = self.preparation.used_addresses()
         if not used:
             return 'Next: choose the pumps used in this experiment.', 0
+        if self.pending_tasks:
+            return 'Commands in progress · wait for the device response.', self.workflow.step
+        manual = self.mode_tabs.currentIndex() == 0
+        if manual:
+            if not self.controller or not self.controller.is_connected:
+                return 'Next: connect to real pumps or the mock controller.', 0
+            for address in used:
+                panel = self.panels[address]
+                index = self.addresses.index(address) + 1
+                if not panel.online:
+                    return f'P{index}: no response; check the connection and rescan.', 0
+                if panel.last_status is None:
+                    return f'P{index}: refresh status before continuing.', 0
+                if panel.last_status == 'A':
+                    return f'P{index}: alarm reported; inspect and stop the pump.', 0
+                if panel.running or panel.stop_pending:
+                    return f'P{index}: running or awaiting STOP; use the stop controls.', 4
+            if not self.preparation.mapping_confirmed:
+                return 'Next: confirm the pump-to-inlet mapping.', 0
         for address in used:
             if self.preparation.plans[address].diameter is None or address in self._diameter_pending:
                 return f'P{self.addresses.index(address) + 1}: enter the syringe inside diameter.', 1
-        if self.mode_tabs.currentIndex() == 0:
-            if not self.controller or not self.controller.is_connected:
-                return 'Next: connect to real pumps or the mock controller.', 0
-            if not self.preparation.mapping_confirmed:
-                return 'Next: confirm the pump-to-inlet mapping.', 0
+        if manual:
             for address in used:
                 if self.preparation.tubing[address] not in ('done', 'skipped'):
                     return f'P{self.addresses.index(address) + 1}: confirm tubing preparation.', 2
         timeline = self.timeline_editor
-        if self.mode_tabs.currentIndex() == 1 and timeline and not timeline.model.included_clips():
-            return 'Next: add a block to the timeline.', 3
+        if not manual and timeline:
+            if timeline.pending():
+                return 'Finish or cancel the current edit before changing preparation.', 3
+            if not timeline.model.included_clips():
+                return 'Next: add a block to the timeline.', 3
         if self.workflow.step < 3:
             return 'Next: choose manual delivery or timeline simulation.', 3
         if self.workflow.step == 3:
@@ -61,7 +79,18 @@ class WorkflowController:
         target = None
         if step == 0:
             connected = self.controller is not None and self.controller.is_connected
-            target = self.workflow.mapping_inputs[self.addresses[0]][0] if not used else self.connect_button if not connected else self.workflow.mapping_check
+            if not used:
+                target = self.workflow.mapping_inputs[self.addresses[0]][0]
+            elif not connected:
+                target = self.connect_button
+            elif any(not self.panels[a].online for a in used):
+                target = self.scan_button
+            elif any(self.panels[a].last_status is None for a in used):
+                target = self.refresh_status_button
+            elif any(self.panels[a].last_status == 'A' for a in used):
+                target = self.emergency_button
+            else:
+                target = self.workflow.mapping_check
         elif step == 1:
             address = next((a for a in used if self.preparation.plans[a].diameter is None or a in self._diameter_pending), None)
             if address is not None:
@@ -71,7 +100,8 @@ class WorkflowController:
             if address is not None:
                 target = self.workflow.tubing_choices[address][1]
         elif step == 3 and self.mode_tabs.currentIndex() == 1 and self.timeline_editor:
-            target = self.timeline_editor.add_button
+            timeline = self.timeline_editor
+            target = timeline.apply_button if timeline.dirty else timeline.duration_apply if timeline.duration_dirty else timeline.add_button
         if target is not None:
             target.setFocus()
             scroll = self.workflow.stack.currentWidget()
