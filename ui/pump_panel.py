@@ -45,12 +45,14 @@ class PumpPanel(GroupBox):
     edit_requested = Signal(int)
     state_changed = Signal()
     shared_setup_requested = Signal()
+    new_dose_requested = Signal(int)
 
     def __init__(self, address: int, parent=None, index=None):
         super().__init__('', parent)
         self.address = address
         self.index = index if index is not None else address + 1
         self.workflow_managed = False
+        self.station_managed = False
         self.workflow_used = True
         self.planned_diameter = None
         self.external_start_blocker = ""
@@ -308,6 +310,11 @@ class PumpPanel(GroupBox):
         actions.addWidget(self.editor_run_button, 1)
         bar.addLayout(actions)
         bar.addWidget(self.editor_stop_button)
+        self.new_dose_button = QPushButton('Restart a full dose')
+        self.new_dose_button.setObjectName('secondaryButton')
+        self.new_dose_button.hide()
+        bar.addWidget(self.new_dose_button)
+        self.new_dose_button.clicked.connect(lambda:self.new_dose_requested.emit(self.address))
 
         self.edit_button.clicked.connect(lambda: self.edit_requested.emit(self.address))
         self.set_diameter_button.clicked.connect(self._request_set_diameter)
@@ -323,19 +330,23 @@ class PumpPanel(GroupBox):
         self.prime_enabled_checkbox.toggled.connect(self._on_prime_toggled)
         self.continuous_checkbox.toggled.connect(self._on_continuous_changed)
         self.mode_combo.currentIndexChanged.connect(self._mode_changed)
-        for widget in (self.rate_input, self.prime_volume_input, self.volume_input):
+        for widget in (self.rate_input, self.volume_input):
             widget.valueChanged.connect(self.mark_settings_dirty)
             widget.lineEdit().textEdited.connect(self.mark_settings_dirty)
             widget.editingFinished.connect(self._refresh_enabled_state)
+        self.prime_volume_input.valueChanged.connect(self._prime_settings_changed)
+        self.prime_volume_input.lineEdit().textEdited.connect(self._prime_settings_changed)
+        self.prime_volume_input.editingFinished.connect(self._refresh_enabled_state)
         def unit_notice(text):
             self.unit_notice.setText(text)
             self.unit_notice.show()
         preserve_quantity(self.rate_input, self.rate_unit_combo, FLOW_UL_MIN, unit_notice, lambda: self._internal_update)
         preserve_quantity(self.volume_input, self.volume_unit_combo, {'UL': 1, 'ML': 1000}, unit_notice, lambda: self._internal_update)
         preserve_quantity(self.prime_volume_input, self.prime_volume_unit_combo, {'UL': 1, 'ML': 1000}, unit_notice, lambda: self._internal_update)
-        for widget in (self.prime_speed_combo, self.prime_volume_unit_combo, self.rate_unit_combo,
-                       self.direction_combo, self.volume_unit_combo):
+        for widget in (self.rate_unit_combo,self.direction_combo,self.volume_unit_combo):
             widget.currentIndexChanged.connect(self.mark_settings_dirty)
+        for widget in (self.prime_speed_combo,self.prime_volume_unit_combo):
+            widget.currentIndexChanged.connect(self._prime_settings_changed)
         manager.changed.connect(self._refresh_summary)
         self._refresh_enabled_state()
 
@@ -354,6 +365,9 @@ class PumpPanel(GroupBox):
             return self.editor_stop_button
         if self.confirmed_diameter is None:
             self.open_diameter_editor()
+            if self.station_managed:
+                self.inline_setup.diameter.setFocus()
+                return self.inline_setup.diameter
             return self.diameter_input
         errors = self.input_errors()
         if errors:
@@ -381,7 +395,7 @@ class PumpPanel(GroupBox):
         fields = [(self.rate_input, 'Enter a complete main flow rate greater than zero.')]
         if not self.continuous_checkbox.isChecked():
             fields.append((self.volume_input, 'Enter a complete main target volume greater than zero.'))
-        if self.prime_enabled_checkbox.isChecked():
+        if self.prime_enabled_checkbox.isChecked() and not self.station_managed:
             fields.append((self.prime_volume_input, 'Enter a complete Prime volume greater than zero.'))
         return [(field, message) for field, message in fields if not field.hasAcceptableInput()]
 
@@ -394,7 +408,7 @@ class PumpPanel(GroupBox):
         fields = [self.rate_input]
         if not self.continuous_checkbox.isChecked():
             fields.append(self.volume_input)
-        if self.prime_enabled_checkbox.isChecked():
+        if self.prime_enabled_checkbox.isChecked() and not self.station_managed:
             fields.append(self.prime_volume_input)
         for field in fields:
             field.interpretText()
@@ -429,9 +443,17 @@ class PumpPanel(GroupBox):
             self.invalidate_diameter('Diameter changed — SET & VERIFY again')
 
     def _on_prime_toggled(self, *_):
+        if self.station_managed:
+            self.state_changed.emit();return
         if self.prime_enabled_checkbox.isChecked():
             self.advanced_checkbox.setChecked(True)
         self.mark_settings_dirty()
+
+    def _prime_settings_changed(self,*_):
+        if self.station_managed:
+            self.state_changed.emit()
+        else:
+            self.mark_settings_dirty()
 
     def _mode_changed(self, *_):
         self.continuous_checkbox.setChecked(bool(self.mode_combo.currentData()))
@@ -447,8 +469,10 @@ class PumpPanel(GroupBox):
             self.rate_input.value(), str(self.rate_unit_combo.currentData()),
             str(self.direction_combo.currentData()), self.continuous_checkbox.isChecked(),
             self.volume_input.value(), str(self.volume_unit_combo.currentData()),
-            self.prime_enabled_checkbox.isChecked(), self.prime_volume_input.value(),
-            str(self.prime_volume_unit_combo.currentData()), str(self.prime_speed_combo.currentData()),
+            False if self.station_managed else self.prime_enabled_checkbox.isChecked(),
+            1.0 if self.station_managed else self.prime_volume_input.value(),
+            'UL' if self.station_managed else str(self.prime_volume_unit_combo.currentData()),
+            'LOW' if self.station_managed else str(self.prime_speed_combo.currentData()),
         )
 
     def is_active(self):
@@ -624,11 +648,17 @@ class PumpPanel(GroupBox):
         if self.running:
             return 'Running. Use Stop this pump to finish.'
         if self.confirmed_diameter is None:
+            if self.station_managed and self.planned_diameter is not None:
+                return 'Next: check syringe and tubing, then Write & verify.'
             return 'Next: enter the actual inside diameter, then Verify diameter.'
         if self.input_errors():
             return 'Next: complete the highlighted delivery fields.'
         if not self.settings_applied:
+            if self.station_managed:return 'Next: write settings and read back on this console.'
             return 'Next: review delivery settings, then Apply and verify.'
+        if self.station_managed:
+            paused=self.last_status=='P' and self.station_phase==1 and self.station_context in ('formal','priming_chain')
+            return 'Stopped with progress retained. Resume delivery here.' if paused else 'Settings verified. Start or stop this pump here.'
         return f'Next: Start pump {self.index}. Settings are verified.'
 
     def _motion(self):
@@ -742,6 +772,8 @@ class PumpPanel(GroupBox):
         self._internal_update = False
         if changed and self.confirmed_diameter is not None and (diameter is None or not math.isclose(diameter, self.confirmed_diameter, rel_tol=0, abs_tol=1e-9)):
             self.invalidate_diameter('Diameter changed — SET & VERIFY again')
+        if self.station_managed and self.confirmed_diameter is None and diameter is not None:
+            self.diameter_status.setText(f'Plan entered: {diameter:g} mm · device confirmation pending')
         self._refresh_enabled_state()
 
     def _refresh_enabled_state(self):
@@ -762,18 +794,20 @@ class PumpPanel(GroupBox):
         self.volume_unit_combo.setEnabled(editable and not self.continuous_checkbox.isChecked())
         prime_on = self.prime_enabled_checkbox.isChecked()
         advanced = self.advanced_checkbox.isChecked()
-        self.prime_enabled_checkbox.setVisible(advanced)
-        self.prime_details.setVisible(prime_on and advanced)
-        for widget in (self.prime_speed_combo, self.prime_volume_input, self.prime_volume_unit_combo):
-            widget.setEnabled(editable and prime_on)
+        self.advanced_checkbox.setVisible(not self.station_managed)
+        self.prime_enabled_checkbox.setVisible(advanced and not self.station_managed)
+        self.prime_details.setVisible(prime_on and advanced and not self.station_managed)
+        if not self.station_managed:
+            for widget in (self.prime_speed_combo,self.prime_volume_input,self.prime_volume_unit_combo):
+                widget.setEnabled(editable and prime_on)
         group_ready = self.online and self.planned_diameter is not None and not self.external_start_blocker.startswith("Select") if self.workflow_managed else ready
         self.active_checkbox.setEnabled(group_ready and not self.busy)
         writable = can_set and self.workflow_used and self.planned_diameter is not None and not self.external_plan_pending if self.workflow_managed else configure
         self.apply_button.setEnabled(writable and not self.input_errors())
         if self.workflow_managed:
             self.apply_button.setText("Write & verify")
-            self.editor_run_button.setText("Review this pump")
-            self.editor_run_button.setObjectName("secondaryButton")
+            self.editor_run_button.setText('Start formal delivery' if self.station_managed else 'Review this pump')
+            self.editor_run_button.setObjectName('runButton' if self.station_managed else 'secondaryButton')
         apply_style = 'secondaryButton' if self.settings_applied else 'applyButton'
         if self.apply_button.objectName() != apply_style:
             self.apply_button.setObjectName(apply_style)

@@ -745,8 +745,9 @@ class TimelineEditor(QWidget):
         self.show_notice('新流程：先選擇幫浦，再新增區塊。')
 
     def load_demo(self):
-        if self.busy() or not self.prepare_to_leave(): return
+        if self.busy() or not self.prepare_to_leave(): return False
         self._load_model(example_timeline(list(self.config_addresses))); self.show_notice('Example loaded with 10 mm sample diameters.')
+        return True
 
     def update_transport(self):
         # Floor prevents the displayed clock announcing a boundary before it occurs.

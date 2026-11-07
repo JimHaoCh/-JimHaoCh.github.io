@@ -15,8 +15,8 @@ class WorkflowController:
         return self.mode_tabs.currentIndex() == 0
 
     def workflow_addresses(self):
-        if self.manual_mode() and self.workflow.step == 4:
-            return self.review_addresses()
+        if self.manual_mode() and self.workflow.step == 3:
+            return [self.selected_address] if self.preparation.plans[self.selected_address].used else self.preparation.used_addresses()
         return self.preparation.used_addresses()
 
     def can_use_timeline(self):
@@ -27,6 +27,10 @@ class WorkflowController:
         # Rewriting DIA can change volume units even when its value is unchanged.
         # Invalidate before dispatch, including writes that fail or are cancelled.
         self._prep_verified.pop(address, None)
+        if hasattr(self,'station_proofs'):
+            self.station_proofs.pop(address,None)
+            self.panels[address].station_context=None
+            self.panels[address].station_phase=None
         self.panels[address].mark_settings_dirty()
 
     def show_nonmodal_warning(self, title, text):
@@ -40,6 +44,7 @@ class WorkflowController:
         if not hasattr(self, 'workflow'):
             return
         timeline = self.timeline_editor
+        if self.manual_mode() and step in (2,4):step=1 if step==2 else 3
         if not self.manual_mode() and step == 2:
             step = 3
         if not self.manual_mode() and timeline and step != 3 and timeline.pending():
@@ -72,7 +77,7 @@ class WorkflowController:
                 if panel.last_status == 'A':
                     return f'P{index}: alarm reported; inspect and stop the pump.', 0
                 if panel.running or panel.stop_pending:
-                    return f'P{index}: running or awaiting STOP; use the stop controls.', 4
+                    return f'P{index}: running or awaiting STOP; use the stop controls.', 3
             if not self.preparation.mapping_confirmed:
                 return 'Next: confirm the pump-to-inlet mapping.', 0
         for address in used:
@@ -80,8 +85,10 @@ class WorkflowController:
                 return f'P{self.addresses.index(address) + 1}: enter the syringe inside diameter.', 1
         if manual:
             for address in used:
-                if self.preparation.tubing[address] not in ('done', 'skipped'):
-                    return f'P{self.addresses.index(address) + 1}: confirm tubing preparation.', 2
+                if self.preparation.tubing[address] == 'pending' and self.workflow.step!=3:
+                    return f'P{self.addresses.index(address) + 1}: confirm tubing preparation.', 1
+            if self.workflow.step==3:
+                return 'Use the pump cards to start, resume or stop. Write changed settings before starting.',3
         timeline = self.timeline_editor
         if not manual and timeline:
             if timeline.pending():
@@ -124,6 +131,9 @@ class WorkflowController:
             address = next((a for a in used if self.preparation.plans[a].diameter is None or a in self._diameter_pending), None)
             if address is not None:
                 target = self.workflow.diameter_inputs[address]
+            elif self.manual_mode():
+                address=next((a for a in used if self.preparation.tubing[a]=='pending'),None)
+                if address is not None:target=self.workflow.tubing_choices[address][1]
         elif step == 2:
             address = next((a for a in used if self.preparation.tubing[a] not in ('done', 'skipped')), None)
             if address is not None:
@@ -249,6 +259,9 @@ class WorkflowController:
             return blocker
         if not self.diameter_matches_plan(address):
             return 'Device diameter confirmation pending.'
+        if getattr(self,'station_ready',False):
+            proof=self.station_proofs.get(address)
+            if not proof or proof.formal!=self.panels[address].current_settings():return 'Write and read back the formal delivery settings first.'
         return self.panels[address].configuration_blocker() or ('' if self.panels[address].settings_applied else 'Apply settings first')
 
     def confirm_mapping(self, checked):
@@ -264,6 +277,7 @@ class WorkflowController:
             return
         self.preparation.confirm_tubing(address, choice)
         if choice == 'needed':
+            self.select_pump(address)
             self.workflow.prep_toggle.setChecked(True)
             self.workflow.prep_pump.setCurrentIndex(self.workflow.prep_pump.findData(address))
         self.refresh_group_controls()
@@ -273,14 +287,15 @@ class WorkflowController:
             self.workflow.next_hint.setText('Stop this pump before changing preparation.')
             return
         if self.timeline_editor:
-            self.timeline_editor.load_demo()
-            self.mode_tabs.setCurrentIndex(1)
-            self.show_workflow_step(3)
+            if self.timeline_editor.load_demo():
+                self.mode_tabs.setCurrentIndex(1)
+                self.show_workflow_step(3)
 
     def reset_experiment_confirmation(self):
         self.preparation.reset_session()
         self._diameter_pending.clear()
         self._prep_verified.clear()
+        self.station_proofs.clear()
         for panel in self.panels.values():
             panel.invalidate_diameter('New experiment · device confirmation required.')
         self.refresh_group_controls()
@@ -302,12 +317,12 @@ class WorkflowController:
         self.select_pump(address)
         self.mode_tabs.setCurrentIndex(0)
         self.workflow.review_scope.setCurrentIndex(self.workflow.review_scope.findData('single'))
-        self.show_workflow_step(4)
+        self.show_workflow_step(3)
 
     def review_group(self):
         self.mode_tabs.setCurrentIndex(0)
         self.workflow.review_scope.setCurrentIndex(self.workflow.review_scope.findData('group'))
-        self.show_workflow_step(4)
+        self.show_workflow_step(3)
 
     def start_review(self):
         if not self.manual_mode():
@@ -316,7 +331,7 @@ class WorkflowController:
         if not addresses or any(self.manual_start_blocker(a) for a in addresses):
             self.refresh_group_controls()
             return
-        self.group_command([self.panels[a] for a in addresses], 'RUN 1')
+        self.start_station_group([self.panels[a] for a in addresses])
 
     def check_review_flow(self):
         if not self.manual_mode() and self.can_use_timeline() and self.timeline_editor:
@@ -330,6 +345,7 @@ class WorkflowController:
             self.timeline_editor.start_preview()
 
     def write_panel_programs(self, panels, overrides=None):
+        if getattr(self,'station_ready',False):return self.write_station_programs(panels,overrides)
         if not self.manual_mode() or not panels:
             return
         plan = []
@@ -406,45 +422,15 @@ class WorkflowController:
             self.refresh_preparation_controls()
 
     def preparation_snapshot(self):
-        view = self.workflow
-        if self._prep_input_pending:
-            return None
-        address = view.prep_pump.currentData()
-        if address is None:
-            return None
-        plan = self.preparation.plans[address]
-        if plan.diameter is None or not all(w.hasAcceptableInput() for w in (view.prep_rate, view.prep_volume)):
-            return None
-        if view.prep_rate.value() <= 0 or view.prep_volume.value() <= 0:
-            return None
-        settings = ProgramSettings(view.prep_rate.value(), view.prep_rate_unit.currentData(),
-                                   view.prep_direction.currentData(), False,
-                                   view.prep_volume.value(), view.prep_volume_unit.currentData(),
-                                   False, 1, 'UL', 'LOW', plan.diameter)
-        return address, settings
+        if getattr(self,'station_ready',False):
+            a=self.selected_address
+            prime=self.station_prime_snapshot(a)
+            return (a,prime) if prime else None
+        return None
 
     def refresh_preparation_controls(self):
-        if not hasattr(self, 'workflow'):
-            return
-        view = self.workflow
-        snapshot = self.preparation_snapshot()
-        address = view.prep_pump.currentData()
-        panel = self.panels.get(address)
-        writable = self.can_write_preparation(snapshot)
-        ready = self.can_start_preparation(snapshot)
-        view.prep_write.setEnabled(writable)
-        view.prep_start.setEnabled(ready)
-        view.prep_stop.setEnabled(bool(panel and self.controller and self.controller.is_connected))
-        for widget in (view.prep_pump, view.prep_rate, view.prep_rate_unit, view.prep_volume, view.prep_volume_unit, view.prep_direction):
-            widget.setEnabled(self.manual_mode() and (not panel or not panel.running and not panel.busy))
-        if snapshot:
-            _, s = snapshot
-            from .pump_panel import RATE_LABELS
-            direction = tr('Infuse' if s.direction == 'INF' else 'Withdraw')
-            volume_unit = 'µL' if s.volume_unit == 'UL' else 'mL'
-            view.prep_summary.setText(self.workflow.identity(address) + f' | {direction} | {s.rate:g} {RATE_LABELS[s.rate_unit]} | {s.volume:g} {volume_unit}')
-        else:
-            view.prep_summary.setText('Choose a pump and enter a positive priming rate and target volume.')
+        if getattr(self,'station_ready',False):
+            self.refresh_station();return
 
     def can_write_preparation(self, snapshot=None):
         snapshot = snapshot if snapshot is not None else self.preparation_snapshot()
@@ -456,46 +442,15 @@ class WorkflowController:
 
     def can_start_preparation(self, snapshot=None):
         snapshot = snapshot if snapshot is not None else self.preparation_snapshot()
-        return bool(snapshot and self.can_write_preparation(snapshot)
-                    and self._prep_verified.get(snapshot[0]) == snapshot
-                    and self.diameter_matches_plan(snapshot[0]))
+        return bool(snapshot and not self.station_priming_blocker(snapshot[0]))
 
     def write_preparation(self):
-        snapshot = self.preparation_snapshot()
-        if not self.can_write_preparation(snapshot):
-            return
-        address, settings = snapshot
-        panel = self.panels[address]
-        self.invalidate_program_confirmation(address)
-        controller = self.controller
-        ticket = self.task_gate.ordinary_ticket()
-        generation = self._pump_generation.get(address, 0)
-        def current():
-            return ticket is not None and self.task_gate.is_current(ticket) and self._pump_generation.get(address, 0) == generation
-        def success(result):
-            if result.diameter:
-                self.log_response(address, 'DIA ' + format_diameter(settings.diameter_mm), result.diameter.set_response)
-                self.log_response(address, 'DIA', result.diameter.query_response)
-            if result.program:
-                self.process_results(result.program.commands)
-            if result.verified and self.preparation_snapshot() == snapshot:
-                panel.confirm_diameter(settings.diameter_mm)
-                self._prep_verified[address] = snapshot
-                self.preparation.confirm_tubing(address, 'needed')
-                self.preparation.preparation_amounts[address] = (settings.volume, settings.volume_unit)
-            else:
-                self._prep_verified.pop(address, None)
-                panel.invalidate_diameter('Device settings changed or verification failed.')
-                MessageBox.warning(self, 'Write result', result.message)
-            self.refresh_group_controls()
-        self.run_task(lambda: write_verified_program(controller, address, settings, current), success, panels=[panel])
+        if getattr(self,'station_ready',False):
+            self.write_station_programs([self.panels[self.selected_address]]);return
 
     def start_preparation(self):
-        snapshot = self.preparation_snapshot()
-        if self.can_start_preparation(snapshot):
-            address, _ = snapshot
-            self.preparation.confirm_tubing(address, 'needed')
-            self.run_single_command(address, 'RUN 1', self.panels[address])
+        if getattr(self,'station_ready',False):
+            self.start_station_priming(self.selected_address);return
 
     def stop_preparation(self):
         address = self.workflow.prep_pump.currentData()

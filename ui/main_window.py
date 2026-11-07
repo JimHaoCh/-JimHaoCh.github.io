@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
+from contextlib import nullcontext
 from typing import Callable, Optional
 from PySide6.QtCore import QEvent, QSettings, QThreadPool, Qt, QTimer, QSignalBlocker
 from PySide6.QtGui import QCloseEvent
@@ -10,6 +11,7 @@ from ne501.syringe import format_diameter
 from ne501.preparation import PreparationState
 from .workflow_controller import WorkflowController
 from .workflow import Workflow
+from .manual_station import ManualStationController
 from ne501.logging_utils import CsvCommandLogger
 from ne501.mock_controller import MockNE501Controller
 from ne501.protocol import PumpResponse
@@ -23,7 +25,7 @@ from .i18n_widgets import Label as QLabel, Button as QPushButton, ComboBox as QC
 
 _CANCELLED=object()
 
-class MainWindow(WorkflowController, QMainWindow):
+class MainWindow(ManualStationController, WorkflowController, QMainWindow):
     def __init__(self,config:dict,settings:QSettings|None=None):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
@@ -76,7 +78,7 @@ class MainWindow(WorkflowController, QMainWindow):
             panel=PumpPanel(address,index=index+1)
             self.panels[address]=panel;panel_grid.addWidget(panel,index//2,index%2);self.editor_stack.addWidget(panel.editor);self.action_stack.addWidget(panel.action_bar)
             panel.set_diameter_requested.connect(self.set_diameter);panel.apply_requested.connect(self.apply_single)
-            panel.run_requested.connect(self.review_single);panel.stop_requested.connect(self.stop_single)
+            panel.run_requested.connect(self.run_single);panel.stop_requested.connect(self.stop_single)
             panel.edit_requested.connect(self.select_pump);panel.state_changed.connect(self.refresh_group_controls)
         dashboard=QWidget();dashboard_layout=QVBoxLayout(dashboard);dashboard_layout.setContentsMargins(0,0,0,0)
         self.show_unused_checkbox=QCheckBox('Show pumps outside this experiment')
@@ -144,11 +146,11 @@ class MainWindow(WorkflowController, QMainWindow):
             panel.diameter_input.setSpecialValueText(tr('Enter diameter'))
             panel.diameter_input.setValue(0)
             panel._internal_update = False
-            panel.run_button.hide()
             for label in panel.step_labels:
                 label.hide()
             panel.shared_setup_requested.connect(lambda: self.show_workflow_step(1))
             panel.diameter_input.valueChanged.connect(lambda value, p=panel: self._legacy_diameter_edit(p, value))
+        self.attach_manual_station()
         if self.timeline_editor:
             from ne501.timeline_model import Timeline
             self.timeline_editor._load_model(Timeline(addresses=self.addresses))
@@ -164,7 +166,7 @@ class MainWindow(WorkflowController, QMainWindow):
         self.refresh_button.clicked.connect(self.refresh_ports);self.connect_button.clicked.connect(self.toggle_connection)
         self.scan_button.clicked.connect(self.scan_pumps);self.refresh_status_button.clicked.connect(self.refresh_status)
         self.select_all_button.clicked.connect(self.select_all_available);self.clear_active_button.clicked.connect(self.clear_active)
-        self.apply_active_button.clicked.connect(self.apply_active);self.run_active_button.clicked.connect(self.review_group)
+        self.apply_active_button.clicked.connect(self.apply_active);self.run_active_button.clicked.connect(self.run_active)
         self.stop_active_button.clicked.connect(self.stop_active);self.emergency_button.clicked.connect(self.emergency_stop)
         self.language_combo.currentIndexChanged.connect(self.change_language);self.ui_scale_combo.currentIndexChanged.connect(self.apply_ui_scale)
         manager.changed.connect(self.retranslate)
@@ -186,6 +188,7 @@ class MainWindow(WorkflowController, QMainWindow):
     def _mode_changed(self,index):
         if self.timeline_editor is not None and index!=1 and self.timeline_editor.running:self.timeline_editor.pause_preview()
         if hasattr(self, 'workflow'):
+            if index==0 and self.workflow.step==4:self.workflow.show_step(3)
             if index == 1 and self.workflow.step == 2:
                 self.workflow.show_step(3)
             self.refresh_group_controls()
@@ -265,6 +268,7 @@ class MainWindow(WorkflowController, QMainWindow):
                 panels = self.active_panels()
                 self.apply_active_button.setEnabled(bool(panels) and all(self.can_write_panel(p) and self.preparation.plans[p.address].diameter is not None and not p.input_errors() and p.address not in self._diameter_pending for p in panels))
                 self.workflow.refresh()
+                self.refresh_station()
         finally:
             self._refreshing_workflow = False
 
@@ -277,7 +281,8 @@ class MainWindow(WorkflowController, QMainWindow):
             self.workflow_banner.setText(f'{mode} | Pump {selected.index} | Address {selected.address:02d} | '+selected.next_instruction())
         panels=self.active_panels()
         can_apply=connected and bool(panels) and all(not p.configuration_blocker() for p in panels)
-        can_run=connected and bool(panels) and all(not p.start_blocker() for p in panels)
+        start_blocker=lambda p:self.manual_start_blocker(p.address) if getattr(self,'station_ready',False) else p.start_blocker()
+        can_run=connected and bool(panels) and all(not start_blocker(p) for p in panels)
         self.apply_active_button.setEnabled(can_apply);self.run_active_button.setEnabled(can_run)
         self.stop_active_button.setEnabled(connected and bool(panels))
         self.clear_active_button.setEnabled(bool(panels))
@@ -290,9 +295,9 @@ class MainWindow(WorkflowController, QMainWindow):
         self.refresh_status_button.setEnabled(connected and not self.pending_tasks)
         self.auto_refresh_checkbox.setEnabled(connected)
         addresses=', '.join(f'{p.address:02d}' for p in panels) or '—'
-        count=len(panels);ready_count=sum(not p.start_blocker() for p in panels)
+        count=len(panels);ready_count=sum(not start_blocker(p) for p in panels)
         self.group_label.setText(f'{count} selected | Ready: {ready_count}/{count} | Addresses: {addresses}' if panels else 'Group: no pumps selected')
-        blockers=[(p,p.start_blocker()) for p in panels if p.start_blocker()]
+        blockers=[(p,start_blocker(p)) for p in panels if start_blocker(p)]
         self._first_group_blocker=blockers[0][0].address if blockers else None
         details=[f'Pump {p.index} (address {p.address:02d}): {reason}' for p,reason in blockers]
         self.group_guide.setText('Select pumps for group actions.' if not panels else details[0] if blockers else 'Ready for group actions.')
@@ -301,8 +306,8 @@ class MainWindow(WorkflowController, QMainWindow):
         self.group_fix_button.setEnabled(connected and not self.pending_tasks)
         if details:self.group_fix_button.setToolTip(details[0])
         self.apply_active_button.setText(f'Apply selected ({count})')
-        self.run_active_button.setText(f'Review selected ({count})')
-        self.run_active_button.setObjectName('secondaryButton')
+        self.run_active_button.setText(f'Start / resume selected ({count})')
+        self.run_active_button.setObjectName('runButton')
         self.stop_active_button.setText(f'Stop selected ({count})')
         self.apply_active_button.setStyleSheet('border: 2px solid #ffd166;' if can_apply and not can_run else '')
         self.run_active_button.setStyleSheet('border: 2px solid #ffd166;' if can_run else '')
@@ -319,10 +324,18 @@ class MainWindow(WorkflowController, QMainWindow):
             self.workflow.mapping_check.setFocus()
             return
         if self.preparation.plans[address].diameter is None or address in self._diameter_pending:
+            if self.manual_mode() and self.workflow.step==3:
+                self.open_station_setup(address)
+                panel.inline_setup.diameter.setFocus()
+                return
             self.show_workflow_step(1)
             self.workflow.diameter_inputs[address].setFocus()
             return
         if self.preparation.tubing[address] not in ('done', 'skipped'):
+            if self.manual_mode() and self.workflow.step==3:
+                self.open_station_setup(address)
+                panel.inline_setup.tubing.setFocus()
+                return
             self.show_workflow_step(2)
             self.workflow.tubing_choices[address][1].setFocus()
             return
@@ -348,16 +361,24 @@ class MainWindow(WorkflowController, QMainWindow):
             outcomes=[]
             for address in self.addresses:
                 if ticket is None or not self.task_gate.is_current(ticket):break
-                try:outcomes.append((address,self.controller.send_command(address,''),None))
-                except Exception as exc:outcomes.append((address,None,str(exc)))
+                try:
+                    response=self.controller.send_command(address,'')
+                    phase=None
+                    if response.ok and response.status in ('I','W','P') and self.panels[address].station_context:
+                        phase=self.controller.send_command(address,'PHN')
+                    outcomes.append((address,response,phase,None))
+                except Exception as exc:outcomes.append((address,None,None,str(exc)))
             return outcomes
         def success(outcomes):
-            for address,response,error in outcomes:
+            for address,response,phase,error in outcomes:
                 panel=self.panels[address]
                 if error:
                     panel.set_online(False);panel.set_last_response(error);self.append_log(f'ERROR: {error}')
                 else:
-                    panel.set_online(True);self.process_results([(address,'STATUS',response)])
+                    panel.set_online(True)
+                    if phase and phase.ok and phase.data.strip().isdigit():panel.station_phase=int(phase.data)
+                    self.process_results([(address,'STATUS',response)])
+                    if phase:self.log_response(address,'PHN',phase)
         self.run_task(action,success,panels=list(self.panels.values()),priority=-10)
 
     def refresh_ports(self) -> None:
@@ -404,6 +425,7 @@ class MainWindow(WorkflowController, QMainWindow):
             self.controller = controller
             self.preparation.reset_session()
             self._prep_verified.clear()
+            self.station_proofs.clear()
             self.settings.setValue("last_port", port)
             self.connection_label.setText('● Demo mode' if isinstance(controller, MockNE501Controller) else f"● Connected {port}")
             self.connection_label.setObjectName("onlineStatus")
@@ -448,6 +470,7 @@ class MainWindow(WorkflowController, QMainWindow):
         self.controller = None
         self.preparation.reset_session()
         self._prep_verified.clear()
+        self.station_proofs.clear()
         self.connection_label.setText("● Disconnected")
         self.connection_label.setObjectName("offlineStatus")
         self.connection_label.style().unpolish(self.connection_label)
@@ -541,17 +564,10 @@ class MainWindow(WorkflowController, QMainWindow):
         self.write_panel_programs([self.panels[address]], {address: settings})
 
     def run_single(self, address: int) -> None:
-        panel = self.panels[address]
-        if not self.require_panel_ready(panel, require_applied=True):
-            return
-        self.run_single_command(address, "RUN 1", panel)
+        self.start_station(address)
 
     def stop_single(self,address:int):
-        if not self.require_connection():return
-        panel=self.panels[address]
-        self._pump_generation[address]=self._pump_generation.get(address,0)+1
-        panel.set_stop_pending()
-        self.run_task(lambda:stop_all_independently(self.controller,[address]),self.present_stop_report,panels=[panel],priority=50)
+        self.hold_station([address])
 
     def run_single_command(self, address: int, command: str, panel: PumpPanel) -> None:
         if command.startswith('RUN') and not self.manual_mode():
@@ -586,18 +602,10 @@ class MainWindow(WorkflowController, QMainWindow):
         if not panels:
             QMessageBox.information(self, "No Active Pump", "Select at least one active pump.")
             return
-        for panel in panels:
-            if not self.require_panel_ready(panel, require_applied=True):
-                return
-        self.group_command(panels, "RUN 1")
+        self.start_station_group(panels)
 
     def stop_active(self):
-        panels=self.active_panels()
-        if not panels:return
-        for panel in panels:
-            self._pump_generation[panel.address]=self._pump_generation.get(panel.address,0)+1
-            panel.set_stop_pending()
-        self.run_task(lambda:stop_all_independently(self.controller,[p.address for p in panels]),self.present_stop_report,panels=panels,priority=50)
+        self.hold_station([p.address for p in self.active_panels()])
 
     def emergency_stop(self) -> None:
         if self.timeline_editor is not None:
@@ -609,7 +617,7 @@ class MainWindow(WorkflowController, QMainWindow):
         if stop_ticket is None:
             return
         self.append_log("EMERGENCY STOP ALL")
-        self.append_log("Queued commands cancelled; an operation already in progress must finish first.")
+        self.append_log('Queued commands cancelled; STOP follows the current command response.')
         panels = list(self.panels.values())
         for panel in panels: panel.set_stop_pending()
         controller = self.controller
@@ -636,6 +644,7 @@ class MainWindow(WorkflowController, QMainWindow):
                 panel = self.panels.get(address)
                 if panel is not None:
                     panel.set_online(False)
+                    panel.set_stop_pending()
                     panel.status_label.setText("● STOP NOT CONFIRMED")
                     panel.version_label.setText("Check pump")
                     panel.set_last_response(f"STOP not confirmed: {reason}")
@@ -713,22 +722,26 @@ class MainWindow(WorkflowController, QMainWindow):
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.log_view.appendPlainText(f"[{timestamp}] {message}")
 
-    def run_task(self,action:Callable,on_success:Optional[Callable]=None,panels=None,priority=0,stop_ticket=None):
+    def run_task(self,action:Callable,on_success:Optional[Callable]=None,panels=None,priority=0,stop_ticket=None,allow_partial=False,stop_operation=False):
         ticket=stop_ticket if stop_ticket is not None else self.task_gate.ordinary_ticket()
         if ticket is None:
             self.append_log('Operation skipped while STOP ALL is in progress');return
         target_panels=panels or []
         generations={p.address:self._pump_generation.get(p.address,0) for p in target_panels}
+        controller = self.controller
         def current():
-            return self.task_gate.is_current(ticket) and (stop_ticket is not None or all(self._pump_generation.get(a,0)==g for a,g in generations.items()))
+            return self.task_gate.is_current(ticket) and (stop_ticket is not None or stop_operation or all(self._pump_generation.get(a,0)==g for a,g in generations.items()))
         def guarded_action():
-            return action() if current() else _CANCELLED
+            if not current(): return _CANCELLED
+            guard = controller.cancellable(current) if stop_ticket is None and hasattr(controller, 'cancellable') else nullcontext()
+            with guard:
+                return action()
         worker=FunctionWorker(guarded_action)
         for panel in target_panels:
             self._panel_pending[panel.address]=self._panel_pending.get(panel.address,0)+1;panel.set_busy(True)
         self.pending_tasks+=1;self._active_workers.add(worker)
         def handle_result(result):
-            if result is _CANCELLED or not current():self.append_log('Queued operation cancelled after STOP request')
+            if result is _CANCELLED or not current() and not (allow_partial and self.task_gate.is_current(ticket)):self.append_log('Queued operation cancelled after STOP request')
             elif on_success is not None:on_success(result)
         def handle_error(message):
             if current():self.on_task_error(target_panels,message)
@@ -751,6 +764,7 @@ class MainWindow(WorkflowController, QMainWindow):
             # Require a new scan and diameter verification before another RUN.
             panel.set_online(False)
             self._prep_verified.pop(panel.address, None)
+            self.station_proofs.pop(panel.address, None)
             panel.status_label.setText("● STATUS UNCONFIRMED")
             panel.version_label.setText("Check pump and rescan")
             panel.set_last_response(f"Error：{message}")

@@ -160,13 +160,15 @@ def run_smoke_test(report_path: Path) -> int:
     panel.apply_button.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.settings_applied, 'fixed-footer apply and read-back')
     panel.editor_run_button.click()
-    if window.workflow.step != 4 or panel.running:
-        raise RuntimeError('Manual start must first show the review page')
-    window.workflow.review_start.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.running, 'fixed-footer start')
+    if window.workflow.step != 3:
+        raise RuntimeError('Manual start must stay on the console')
     panel.editor_stop_button.click()
-    wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'S' and not panel.running, 'fixed-footer stop')
-    window.show_workflow_step(2)
+    wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'P' and not panel.running, 'fixed-footer stop preserving progress')
+    panel.run_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.running, 'card resume')
+    panel.stop_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'P', 'card stop')
     window.change_tubing(0, 'needed')
     window.workflow.prep_rate.setValue(10)
     window.workflow.prep_volume.setValue(5)
@@ -183,20 +185,20 @@ def run_smoke_test(report_path: Path) -> int:
     if window.workflow.review_table.columnCount() != 4:
         raise RuntimeError('Timeline review must omit manual volume stages')
     window.workflow.mode_selector.setCurrentIndex(0)
-    window.show_workflow_step(2)
+    window.show_workflow_step(3)
     window.workflow.prep_start.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.running, 'explicit priming start')
     window.workflow.prep_stop.click()
     wait_until(lambda: window.pending_tasks == 0 and not panel.running, 'priming stop')
-    if panel.settings_applied:
-        raise RuntimeError('Priming must not arm the main delivery')
+    if not window.manual_start_blocker(0):
+        raise RuntimeError('Formal delivery requires user confirmation of tubing after priming')
     window.set_diameter(0, 10)
     wait_until(lambda: window.pending_tasks == 0, 'same-diameter rewrite')
     if window.workflow.prep_start.isEnabled():
         raise RuntimeError('A diameter rewrite must invalidate the old priming verification')
     for language in ('zh_TW', 'en'):
         manager.set_language(language)
-        for step in range(5):
+        for step in (0,1,3):
             window.show_workflow_step(step)
             app.processEvents()
             window.grab().save(str(report_path.parent / f'workflow-step{step + 1}-{language}.png'))
@@ -218,6 +220,9 @@ def run_smoke_test(report_path: Path) -> int:
         "bounded_priming": True,
         "mode_specific_workflow": True,
         "stale_priming_proof_rejected": True,
+        "same_page_start_stop_resume": True,
+        "manual_stages": 3,
+        "unified_explicit_priming": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")

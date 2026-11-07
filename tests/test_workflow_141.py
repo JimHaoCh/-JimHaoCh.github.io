@@ -60,6 +60,7 @@ class ModeWorkflowTests(unittest.TestCase):
     def ready(self, addresses=(0,)):
         self.win.controller = MockNE501Controller([0, 1, 2, 3], latency=0)
         self.win.controller.connect()
+        self.win._set_group_buttons_enabled(True)
         for panel in self.win.panels.values():
             panel.set_online(True)
             panel.update_from_status('S')
@@ -88,9 +89,9 @@ class ModeWorkflowTests(unittest.TestCase):
     def test_flow_has_four_steps_and_no_manual_device_write_entry(self):
         self.ready()
         self.arm_priming()
-        self.win.show_workflow_step(2)
+        self.win.show_workflow_step(3)
         view = self.win.workflow
-        self.assertEqual(sum(b.isVisible() for b in view.steps), 5)
+        self.assertEqual(sum(b.isVisible() for b in view.steps), 3)
         view.mode_selector.setCurrentIndex(1)
         self.assertEqual(self.win.mode_tabs.currentIndex(), 1)
         self.assertEqual(view.step, 3)
@@ -117,7 +118,7 @@ class ModeWorkflowTests(unittest.TestCase):
             sent.assert_not_called()
         view.mode_selector.setCurrentIndex(0)
         self.assertTrue(view.prep_start.isEnabled())
-        self.assertEqual(sum(b.isVisible() for b in view.steps), 5)
+        self.assertEqual(sum(b.isVisible() for b in view.steps), 3)
 
     def test_same_diameter_rewrite_cannot_rearm_stale_volume_units(self):
         self.ready()
@@ -157,7 +158,8 @@ class ModeWorkflowTests(unittest.TestCase):
             self.idle()
             sent.assert_not_called()
         self.arm_priming()
-        self.assertEqual(self.win.controller.pumps[0].phases[1].rate, 10)
+        self.assertEqual(self.win.controller.pumps[0].phases[1].rate, 99)
+        self.assertEqual(self.win.controller.pumps[0].phases[3].rate, 10)
 
     def test_write_exception_cannot_restore_old_proof_after_reconnect_checks(self):
         self.ready()
@@ -195,7 +197,7 @@ class ModeWorkflowTests(unittest.TestCase):
         self.assertTrue(timeline.dirty)
         self.win.mode_tabs.setCurrentIndex(0)
         self.win.review_single(0)
-        self.assertEqual(self.win.workflow.step, 4)
+        self.assertEqual(self.win.workflow.step, 3)
         self.assertTrue(self.win.update_preparation(0, diameter=12))
         self.assertTrue(timeline.dirty)
         self.assertEqual(timeline.rate_spin.lineEdit().text(), draft)
@@ -238,7 +240,7 @@ class ModeWorkflowTests(unittest.TestCase):
         self.assertFalse(timeline.check_button.isEnabled())
         self.assertFalse(self.win.workflow.review_check.isEnabled())
 
-    def test_single_review_guide_uses_the_same_targets_as_start(self):
+    def test_console_guide_targets_selected_pump_and_group_retains_its_own_scope(self):
         self.ready((0, 1))
         self.win.update_preparation(1, diameter=None)
         self.win.preparation.mapping_confirmed = True
@@ -248,12 +250,13 @@ class ModeWorkflowTests(unittest.TestCase):
         self.win.review_single(0)
         self.assertTrue(self.win.workflow.review_start.isEnabled())
         self.assertEqual(self.win.review_addresses(), [0])
-        self.assertEqual(self.win.workflow_hint()[1], 4)
+        self.assertEqual(self.win.workflow_hint()[1], 3)
         self.assertNotIn('P2', self.win.workflow.next_hint.source_text)
-        self.assertEqual(self.win.workflow.progress.source_text, 'Review targets: P1')
+        self.assertIn('Editing P1',self.win.workflow.progress.source_text)
         self.win.workflow.review_scope.setCurrentIndex(0)
-        self.assertIn('P2', self.win.workflow.next_hint.source_text)
         self.assertFalse(self.win.workflow.review_start.isEnabled())
+        self.assertEqual(self.win.selected_address,0)
+        self.assertTrue(self.win.panels[0].editor_run_button.isEnabled())
 
     def test_review_and_direct_simulation_share_device_and_pending_command_locks(self):
         self.load_flow()
@@ -310,7 +313,7 @@ class ModeWorkflowTests(unittest.TestCase):
             manager.set_language(language)
             for scale in (1., 1.3):
                 self.win.ui_scale_combo.setCurrentIndex(self.win.ui_scale_combo.findData(scale))
-                for mode, route in ((0, (0, 1, 2, 3, 4)), (1, (0, 1, 3, 4))):
+                for mode, route in ((0, (0, 1, 3)), (1, (0, 1, 3, 4))):
                     self.win.workflow.mode_selector.setCurrentIndex(mode)
                     for width, height in ((1024, 768), (1366, 768)):
                         self.win.resize(width, height)
@@ -331,7 +334,7 @@ class ModeWorkflowTests(unittest.TestCase):
                                         for widget in self.win.findChildren(cls):
                                             if widget.isVisible():
                                                 self.assertFalse(re.search(r'[\u3400-\u9fff]', widget.text()), widget.text())
-                                if width == 1366 and (mode == 1 and step in (0, 1, 4) or mode == 0 and step == 2):
+                                if width == 1366 and (mode == 1 and step in (0, 1, 4) or mode == 0 and step == 3):
                                     name = f'workflow-{"flow" if mode else "manual"}-step{route.index(step) + 1}-{language}-{round(scale * 100)}.png'
                                     self.assertTrue(self.win.grab().save(str(shots / name)))
 

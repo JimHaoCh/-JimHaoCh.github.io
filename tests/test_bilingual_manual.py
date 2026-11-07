@@ -77,7 +77,7 @@ class BilingualManualTests(unittest.TestCase):
         self.assertFalse(self.win.run_active_button.isEnabled())
         p0.confirm_diameter(10);p0.set_active(True)
         self.assertTrue(self.win.apply_active_button.isEnabled());self.assertFalse(self.win.run_active_button.isEnabled())
-        p0.mark_settings_applied();self.assertTrue(self.win.run_active_button.isEnabled())
+        self.win.apply_single(0,p0.current_settings());self.wait_idle();self.assertTrue(self.win.run_active_button.isEnabled())
         self.win.select_pump(1);self.assertEqual(self.win.selected_address,1);self.assertTrue(p0.is_active());self.assertFalse(p1.is_active())
         p0.rate_input.setValue(2);self.assertFalse(self.win.run_active_button.isEnabled())
         self.assertTrue(p0.stop_button.isEnabled())
@@ -91,7 +91,7 @@ class BilingualManualTests(unittest.TestCase):
         self.assertIsNotNone(panel.applied_snapshot)
         self.win.run_single(0);self.wait_idle();self.assertTrue(panel.running)
         self.win.stop_single(0);self.wait_idle()
-        self.assertFalse(panel.running);self.assertEqual(panel.last_status,'S')
+        self.assertFalse(panel.running);self.assertEqual(panel.last_status,'P')
     def test_manual_status_refresh_and_opt_in_poll_do_not_accumulate(self):
         self.ready_mock();self.assertFalse(self.win.auto_refresh_checkbox.isChecked())
         self.win.refresh_status();self.wait_idle()
@@ -177,7 +177,8 @@ class BilingualManualTests(unittest.TestCase):
     def test_group_run_stops_sending_after_first_error(self):
         self.ready_mock()
         for address in (0,1,2):
-            panel=self.win.panels[address];panel.confirm_diameter(10);panel.mark_settings_applied();panel.set_active(True)
+            panel=self.win.panels[address]
+            self.win.apply_single(address,panel.current_settings());self.wait_idle();panel.set_active(True)
         original=self.win.controller.send_command
         sent=[]
         def send(address,command):
@@ -257,26 +258,25 @@ class BilingualManualTests(unittest.TestCase):
         self.assertIsNotNone(panel.confirmed_diameter)
         self.assertFalse(panel.diameter_fields.isVisible())
         self.assertFalse(panel.editor_run_button.isEnabled())
-        self.assertIn('Apply and verify',panel.step_banner.source_text)
+        self.assertIn('write settings and read back',panel.step_banner.source_text)
         panel.apply_button.click();self.wait_idle()
         self.assertTrue(panel.editor_run_button.isEnabled())
-        self.assertIn('Start pump 2',panel.step_banner.source_text)
+        self.assertIn('Start or stop this pump here',panel.step_banner.source_text)
         self.assertFalse(panel.is_active())
-        panel.editor_run_button.click();self.app.processEvents()
-        self.assertEqual(self.win.workflow.step,4);self.assertFalse(panel.running)
-        self.win.workflow.review_start.click();self.wait_idle()
+        panel.editor_run_button.click();self.wait_idle()
+        self.assertEqual(self.win.workflow.step,3)
         self.assertTrue(panel.running)
         self.assertFalse(panel.editor_run_button.isEnabled())
         self.assertFalse(self.win.panels[0].running)
         panel.editor_stop_button.click();self.wait_idle()
-        self.assertFalse(panel.running);self.assertEqual(panel.last_status,'S')
+        self.assertFalse(panel.running);self.assertEqual(panel.last_status,'P')
 
     def test_group_resolve_identifies_the_blocking_pump_without_sending_commands(self):
         self.ready_mock();self.win.mode_tabs.setCurrentIndex(0)
         for address in (0,1):
             panel=self.win.panels[address];panel.confirm_diameter(10);panel.set_active(True)
         self.win.panels[1].mark_settings_applied();self.win.select_pump(1)
-        self.assertIn('Pump 1 (address 00): Apply settings first',self.win.group_guide.source_text)
+        self.assertIn('Pump 1 (address 00): Write and read back the formal delivery settings first.',self.win.group_guide.source_text)
         self.assertFalse(self.win.run_active_button.isEnabled())
         with patch.object(self.win.controller,'send_command',wraps=self.win.controller.send_command) as commands:
             self.win.group_fix_button.click();self.app.processEvents()
@@ -313,7 +313,7 @@ class BilingualManualTests(unittest.TestCase):
 
     def test_status_age_is_information_and_does_not_reset_verified_settings(self):
         self.ready_mock();panel=self.win.panels[0]
-        panel.confirm_diameter(10);panel.mark_settings_applied()
+        self.win.apply_single(0,panel.current_settings());self.wait_idle()
         panel.checked_at=time.monotonic()-20;panel.refresh_age()
         self.assertIn('s ago',panel.last_check_label.source_text)
         self.assertNotIn('needs refresh',panel.last_check_label.source_text)

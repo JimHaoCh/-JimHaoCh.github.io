@@ -356,6 +356,8 @@ CATALOG.extend([
 
 from .workflow_i18n import WORKFLOW_TEXT
 CATALOG.extend(WORKFLOW_TEXT)
+from .manual_station_i18n import MANUAL_STATION_TEXT
+CATALOG.extend(MANUAL_STATION_TEXT)
 
 _exact = {}
 _patterns = []

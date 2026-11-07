@@ -1,17 +1,16 @@
-NE-501 v1.4.2 quick start
+NE-501 v1.5.0 quick start
 
-Choose Manual Control or Timeline Editor above the step bar.
-Manual Control: connect/map > syringes > optional manual priming > manual settings > review/start.
-Timeline Editor: pumps/paths > syringes > timeline editor > check/preview.
+Manual Control: Connect & map > Syringe & tubing > Manual console.
+Timeline Editor: Pumps & paths > Syringes > Timeline editor > Check & preview.
 
-Connection category and editing function are separate. Demo mode connects virtual pumps. Offline planning has no controller connection. Real pump connection identifies an open real controller connection; individual responses establish device status. Loading an example workflow changes planning data and leaves the controller category unchanged.
+Enter the actual syringe inside diameter in mm and confirm tubing/outlet preparation. Set formal rate, units, direction and continuous or target-volume mode. Write & verify, then start on the pump card or fixed editor footer. Four cards retain Start/Resume and Stop while the editor scrolls. Editing a pump leaves the independently selected group unchanged.
 
-Timeline playback is called Flow preview and sends no pump start commands. Author any initial preparation as timeline blocks; all included blocks contribute to the totals. Independent priming and device program writes remain in Manual Control. A blank or unsaved filename is Untitled workflow.
+Use the single Priming/purge tool for optional preparation. Choose one of five speeds or a custom rate, direction and finite volume. Write & verify, then explicitly start priming. Continue with formal delivery after priming defaults off and requires tubing confirmation. Formal start enters formal delivery directly. Resume retains native progress. Changed priming drafts require a new priming write; unchanged verified formal delivery remains available.
 
-A rewrite of DIA or program settings invalidates the previous program proof before dispatch. Review manual targets and volume stages, write/read back settings, then explicitly start the listed pumps. Immediate manual priming and optional startup Prime have different execution times.
+Single/group Stop stops the motor and preserves native progress. Resume delivery continues the remaining dose. A paused finite delivery also offers Restart a full dose. Stop all ends the program on every configured address and confirms responses individually. Invalid fields never disable Stop. A stop request cancels subsequent ordinary packets after the current communication response; hardware latency has not been measured.
 
-Unapplied timeline drafts survive switching to manual control. Single-pump review guidance follows the listed targets. Editor and review preview share running/pending-command locks. Disconnecting without confirming STOP retains an unconfirmed-stop indicator.
+The demo controller models elapsed-time finite delivery, pause/resume and explicit priming transitions. Demo mode identifies virtual pumps. Offline planning and Real pump connection identify the other connection categories. Cancelling example loading preserves mode, page and draft.
 
-Stop all stops the preview and sends STOP to every configured address. An active configuration batch finishes before the queued STOP worker; command-level cancellation is a recommended follow-up. The demo controller acknowledges commands and does not yet advance finite delivery or Prime phases by elapsed time.
+Flow preview sends no pump start commands. Initial preparation belongs in timeline blocks, and all included blocks contribute to totals. Drag, trim, copy, split, snap, undo/redo, unit conversion and JSON files remain available. Device read-backs and tubing confirmations are session data.
 
-See BILINGUAL_MANUAL_UI_v1.4.2.md and UI_REVIEW_v1.4.2.md. Windows x64 and Windows 11 ARM64 share the installer. Actual delivery, tubing and synchronization require hardware measurements.
+See BILINGUAL_MANUAL_UI_v1.5.0.md and UI_REVIEW_v1.5.0.md. Windows x64 and Windows 11 ARM64 share the installer. Automated device tests use simulated I/O; actual delivery, tubing behavior, stop latency and synchronization require hardware measurements.

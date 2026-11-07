@@ -179,7 +179,7 @@ class WorkflowUITests(unittest.TestCase):
         self.win.update_preparation(0, diameter=None)
         self.assertEqual(self.win.workflow_hint()[1], 1)
         self.win.update_preparation(0, diameter=4.699)
-        self.assertEqual(self.win.workflow_hint()[1], 2)
+        self.assertEqual(self.win.workflow_hint()[1], 1)
         self.win.change_tubing(0, 'done')
         self.assertEqual(self.win.workflow_hint()[1], 3)
         self.win.panels[0].set_online(False)
@@ -256,7 +256,7 @@ class WorkflowUITests(unittest.TestCase):
         self.idle()
         self.assertFalse(self.win.panels[0].running)
 
-    def test_bounded_priming_does_not_arm_main_delivery_or_auto_start_it(self):
+    def test_unified_priming_never_auto_starts_formal_and_requires_tubing_confirmation(self):
         self.ready((0,))
         view = self.win.workflow
         self.win.change_tubing(0, 'needed')
@@ -264,7 +264,7 @@ class WorkflowUITests(unittest.TestCase):
         view.prep_volume.setValue(5)
         self.win.write_preparation()
         self.idle()
-        self.assertFalse(self.win.panels[0].settings_applied)
+        self.assertTrue(self.win.panels[0].settings_applied)
         self.assertEqual(self.win.controller.pumps[0].status, 'S')
         self.assertTrue(view.prep_start.isEnabled())
         self.win.start_preparation()
@@ -273,8 +273,8 @@ class WorkflowUITests(unittest.TestCase):
         self.assertFalse(view.review_start.isEnabled())
         self.win.stop_preparation()
         self.idle()
-        self.assertEqual(self.win.controller.pumps[0].status, 'S')
-        self.assertFalse(self.win.panels[0].settings_applied)
+        self.assertEqual(self.win.controller.pumps[0].status, 'P')
+        self.assertTrue(self.win.panels[0].settings_applied)
         self.assertEqual(self.win.preparation.tubing[0], 'needed')
 
     def test_priming_text_change_invalidates_previous_program_before_focus_leaves(self):
@@ -363,25 +363,24 @@ class WorkflowUITests(unittest.TestCase):
         for notice in list(self.win._notice_windows):
             notice.close()
 
-    def test_manual_review_opens_without_motion_then_starts_exactly_one_pump(self):
+    def test_manual_console_starts_exactly_one_pump_without_page_change(self):
         self.ready()
         self.win.write_review()
         self.idle()
         panel = self.win.panels[1]
+        self.win.show_workflow_step(3)
+        self.win.select_pump(1)
         with patch.object(self.win.controller, 'send_command', wraps=self.win.controller.send_command) as sent:
             panel.editor_run_button.click()
-            self.app.processEvents()
-            self.assertEqual(self.win.workflow.step, 4)
-            self.assertEqual(self.win.review_addresses(), [1])
-            sent.assert_not_called()
-        self.win.workflow.review_start.click()
-        self.idle()
+            self.idle()
+            self.assertEqual(self.win.workflow.step, 3)
+            self.assertEqual([c.args[0] for c in sent.call_args_list if c.args[1].startswith('RUN')],[1])
         self.assertTrue(panel.running)
         self.assertFalse(self.win.panels[0].running)
         self.win.emergency_stop()
         self.idle()
 
-    def test_all_five_steps_languages_sizes_scales_and_input_contrast(self):
+    def test_three_manual_stages_languages_sizes_scales_and_input_contrast(self):
         self.ready()
         self.win.show_workflow_step(1)
         shots = Path(__file__).resolve().parents[1] / 'builds/ui-shots-source'
@@ -392,12 +391,12 @@ class WorkflowUITests(unittest.TestCase):
                 self.app.setStyleSheet(build_stylesheet(scale))
                 for width, height in ((1024, 768), (1366, 768)):
                     self.win.resize(width, height)
-                    for step in range(5):
+                    for step in (0,1,3):
                         self.win.show_workflow_step(step)
                         self.app.processEvents()
                         self.assertLessEqual(self.win.width(), width)
                         self.assertLessEqual(self.win.height(), height)
-                        buttons = self.win.workflow.steps + [self.win.emergency_button]
+                        buttons = [b for b in self.win.workflow.steps if b.isVisible()] + [self.win.emergency_button]
                         if self.win.workflow.next_button.isVisible():
                             buttons.append(self.win.workflow.next_button)
                         for button in buttons:

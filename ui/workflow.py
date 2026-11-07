@@ -89,6 +89,8 @@ class Workflow(QWidget):
         self.diameter_cards = {}
         self.tubing_choices = {}
         self.prep_input_values = {}
+        self._prep_selector = ComboBox()
+        self._prep_selector.currentIndexChanged.connect(lambda *_: owner.select_pump(self._prep_selector.currentData()) if self._prep_selector.currentData() in owner.panels else None)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(5)
@@ -225,6 +227,19 @@ class Workflow(QWidget):
         self.empty_syringes = Label('Select the pumps in step 1 to enter their syringe diameters.')
         self.empty_syringes.setWordWrap(True)
         layout.addWidget(self.empty_syringes)
+        self.tubing_box, tubing_layout = card()
+        tubing_layout.addWidget(Label('Syringe clamping, tubing and outlet check'))
+        for address in self.owner.addresses:
+            row = QHBoxLayout(); label = Label(); label.setWordWrap(True)
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            choice = ComboBox()
+            for text, code in (('Choose preparation status','pending'),('Connected · needs priming','needed'),
+                               ('Tubing checked · ready','done'),('Skip priming · user confirmed','skipped')):
+                choice.addItem(text,code)
+            choice.currentIndexChanged.connect(lambda _,a=address,w=choice:self.owner.change_tubing(a,w.currentData()))
+            row.addWidget(label,1);row.addWidget(choice)
+            tubing_layout.addLayout(row);self.tubing_choices[address]=(label,choice)
+        layout.addWidget(self.tubing_box)
         self.copy_button = Button('Use current device read-backs as plan values')
         self.copy_button.clicked.connect(self.owner.adopt_diameter_readbacks)
         layout.addWidget(self.copy_button)
@@ -236,87 +251,29 @@ class Workflow(QWidget):
         return view
 
     def build_tubing(self):
-        view, layout = page('Manual tubing check & optional priming',
-                            'Check syringe clamping, tubing connections and the outlet or valve path. These are user confirmations.')
-        for address in self.owner.addresses:
-            row = QHBoxLayout()
-            label = Label()
-            label.setTextFormat(Qt.TextFormat.PlainText)
-            choice = ComboBox()
-            for text, code in (('Choose preparation status', 'pending'), ('Needs priming', 'needed'),
-                               ('Prepared · user confirmed', 'done'), ('Skip this time · user confirmed', 'skipped')):
-                choice.addItem(text, code)
-            choice.currentIndexChanged.connect(lambda index, a=address, c=choice: self.owner.change_tubing(a, c.currentData()))
-            row.addWidget(label, 1)
-            row.addWidget(choice)
-            layout.addLayout(row)
-            self.tubing_choices[address] = (label, choice)
-        self.prep_toggle = Button('Show manual priming controls')
-        self.prep_toggle.setCheckable(True)
-        self.prep_toggle.toggled.connect(lambda checked: self.prep_controls.setVisible(checked))
-        layout.addWidget(self.prep_toggle)
-        self.prep_controls, box = card()
-        self.prep_controls.hide()
-        heading = Label('Immediate priming · manual mode')
-        heading.setObjectName('cardTitle')
-        box.addWidget(heading)
-        self.prep_pump = ComboBox()
-        self.prep_pump.currentIndexChanged.connect(self.owner.preparation_target_changed)
-        box.addWidget(self.prep_pump)
-        grid = QGridLayout()
-        self.prep_direction = ComboBox()
-        self.prep_direction.addItem('→ Infuse', 'INF')
-        self.prep_direction.addItem('← Withdraw', 'WDR')
-        self.prep_rate = SpinBox()
-        self.prep_rate.setDecimals(4)
-        self.prep_rate.setRange(0, 9999)
-        self.prep_rate.setSpecialValueText(tr('Enter rate'))
-        self.prep_rate_unit = ComboBox()
-        for text, code in (('µL/min', 'UM'), ('mL/min', 'MM'), ('µL/hr', 'UH'), ('mL/hr', 'MH')):
-            self.prep_rate_unit.addItem(text, code)
-        self.prep_volume = SpinBox()
-        self.prep_volume.setDecimals(3)
-        self.prep_volume.setRange(0, 9999)
-        self.prep_volume.setSpecialValueText(tr('Enter volume'))
-        self.prep_volume_unit = ComboBox()
-        self.prep_volume_unit.addItem('µL', 'UL')
-        self.prep_volume_unit.addItem('mL', 'ML')
-        for row, (text, widget) in enumerate((('Direction', self.prep_direction), ('Rate', self.prep_rate), ('Target volume', self.prep_volume))):
-            grid.addWidget(Label(text), row, 0)
-            grid.addWidget(widget, row, 1)
-        grid.addWidget(self.prep_rate_unit, 1, 2)
-        grid.addWidget(self.prep_volume_unit, 2, 2)
-        box.addLayout(grid)
-        preserve_quantity(self.prep_rate, self.prep_rate_unit, FLOW_UL_MIN, lambda text: self.owner.append_log(text))
-        preserve_quantity(self.prep_volume, self.prep_volume_unit, {'UL': 1, 'ML': 1000}, lambda text: self.owner.append_log(text))
-        for widget in (self.prep_direction, self.prep_rate_unit, self.prep_volume_unit):
-            widget.currentIndexChanged.connect(self.owner.preparation_inputs_changed)
-        for widget in (self.prep_rate, self.prep_volume):
-            widget.valueChanged.connect(self.owner.preparation_inputs_changed)
-            widget.lineEdit().textEdited.connect(self.owner.preparation_inputs_changed)
-            widget.editingFinished.connect(self.owner.finish_preparation_input)
-        self.prep_summary = Label()
-        self.prep_summary.setWordWrap(True)
-        box.addWidget(self.prep_summary)
-        actions = QHBoxLayout()
-        self.prep_write = Button('Write priming settings')
-        self.prep_start = Button('Start priming only')
-        self.prep_stop = Button('Stop this pump')
-        self.prep_start.setObjectName('runButton')
-        self.prep_stop.setObjectName('stopButton')
-        self.prep_write.clicked.connect(self.owner.write_preparation)
-        self.prep_start.clicked.connect(self.owner.start_preparation)
-        self.prep_stop.clicked.connect(self.owner.stop_preparation)
-        for button in (self.prep_write, self.prep_start, self.prep_stop):
-            actions.addWidget(button)
-        box.addLayout(actions)
-        layout.addWidget(self.prep_controls)
-        note = Label('Immediate priming runs here. Optional startup Prime runs when you start the reviewed pumps. Review both amounts.')
-        note.setObjectName('secondaryLabel')
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        layout.addStretch()
-        return view
+        # Retain the old stack index for JSON/editor navigation compatibility.
+        return QWidget()
+
+    @property
+    def prep_pump(self): return self._prep_selector
+    @property
+    def prep_toggle(self): return self.owner.panels[self.owner.selected_address].priming_control.toggle
+    @property
+    def prep_rate(self): return self.owner.panels[self.owner.selected_address].priming_control.custom_rate
+    @property
+    def prep_rate_unit(self): return self.owner.panels[self.owner.selected_address].priming_control.rate_unit
+    @property
+    def prep_volume(self): return self.owner.panels[self.owner.selected_address].priming_control.volume
+    @property
+    def prep_volume_unit(self): return self.owner.panels[self.owner.selected_address].priming_control.volume_unit
+    @property
+    def prep_direction(self): return self.owner.panels[self.owner.selected_address].priming_control.direction
+    @property
+    def prep_write(self): return self.owner.panels[self.owner.selected_address].apply_button
+    @property
+    def prep_start(self): return self.owner.panels[self.owner.selected_address].priming_control.start
+    @property
+    def prep_stop(self): return self.owner.panels[self.owner.selected_address].stop_button
 
     def build_review(self):
         view, layout = page('Review targets and delivery before starting',
@@ -353,8 +310,8 @@ class Workflow(QWidget):
         return view
 
     def show_step(self, step):
-        if not self.owner.manual_mode() and step == 2:
-            step = 3
+        if self.owner.manual_mode() and step in (2,4):step = 1 if step==2 else 3
+        elif not self.owner.manual_mode() and step == 2:step=3
         self.step = step
         self.stack.setCurrentIndex(step)
         self.refresh()
@@ -376,8 +333,10 @@ class Workflow(QWidget):
             for i, text in enumerate(('Manual Control', 'Timeline Editor')):
                 self.mode_selector.setTabText(i, tr(text))
             self.mode_selector.setAccessibleName(tr('Operation mode'))
-            labels = ('1 Connect & map', '2 Syringes', '3 Manual priming', '4 Manual settings', '5 Review & start') if manual else ('1 Pumps & paths', '2 Syringes', '', '3 Timeline editor', '4 Check & preview')
-            self.steps[2].setVisible(manual)
+            labels = ('1 Connect & map', '2 Syringe & tubing', '', '3 Manual console', '') if manual else ('1 Pumps & paths', '2 Syringes', '', '3 Timeline editor', '4 Check & preview')
+            self.steps[2].hide()
+            self.steps[4].setVisible(not manual)
+            self.tubing_box.setVisible(manual)
             owner.connection_controls.setVisible(manual)
             self.mapping_check.setVisible(manual)
             mapping = self.stack.widget(0)
@@ -385,12 +344,13 @@ class Workflow(QWidget):
             mapping.note_label.setText('Choose the pumps used in this experiment. Match each address to its physical pump and chip inlet.' if manual else 'Choose the pumps, fluids and inlets for the timeline. Offline editing is available.')
             self.mapping_note.setText('User confirmation · connection alone does not confirm the tubing layout.' if manual else 'Add any initial priming as timeline blocks. Every included block contributes to the delivery totals.')
             self.syringe_note.setText('Entered = plan value. Read back = confirmed in this connection. Writing settings keeps the motor stopped.' if manual else 'Timeline planning uses the entered diameters. Device writes and priming are available in Manual mode.')
+            self.stack.widget(1).title_label.setText('Syringe & tubing' if manual else 'Syringe inside diameter d (mm)')
             self.stack.widget(4).title_label.setText('Review targets and delivery before starting' if manual else 'Review the timeline before preview')
             self.stack.widget(4).note_label.setText('Plan values, user confirmations and device read-backs are listed separately.' if manual else 'Check pump paths, syringe diameters and the total delivery from all included blocks.')
             complete = [
                 bool(targets) and (not manual or prep.mapping_confirmed and bool(owner.controller and owner.controller.is_connected)
                 and all(owner.panels[a].online and owner.panels[a].last_status not in (None, 'A') for a in targets)),
-                bool(targets) and all(prep.plans[a].diameter is not None and a not in owner._diameter_pending for a in targets),
+                bool(targets) and all(prep.plans[a].diameter is not None and a not in owner._diameter_pending and (not manual or prep.tubing[a]!='pending') for a in targets),
                 bool(targets) and all(prep.tubing[a] in ('done', 'skipped') for a in targets),
                 bool(timeline and timeline.model.included_clips() and not timeline.pending()) if not manual else bool(targets) and all(not owner.panels[a].input_errors() for a in targets),
                 bool(timeline and timeline.checked and timeline.plan_ready() and not timeline.pending()) if not manual else bool(targets) and all(not owner.manual_start_blocker(a) for a in targets),
@@ -405,7 +365,7 @@ class Workflow(QWidget):
             entered = sum(prep.plans[a].diameter is not None and a not in owner._diameter_pending for a in used)
             verified = sum(owner.diameter_matches_plan(a) for a in used)
             count = (f'Plan entered: {entered}/{len(used)} | Device read-back: {verified}/{len(used)}' if manual else f'Timeline diameters entered: {entered}/{len(used)}') if used else 'No pumps selected for this experiment.'
-            self.progress.setText('Review targets: ' + ', '.join(f'P{owner.panels[a].index}' for a in targets) if manual and self.step == 4 else count)
+            self.progress.setText(f'Editing P{owner.panels[owner.selected_address].index} · Start and stop each pump on its card.' if manual and self.step == 3 else count)
             self.syringe_count.setText(count)
             self.mapping_check.blockSignals(True)
             self.mapping_check.setChecked(prep.mapping_confirmed)
@@ -452,10 +412,9 @@ class Workflow(QWidget):
                 choice.setCurrentIndex(choice.findData(prep.tubing[address]))
                 del blocker
                 choice.setEnabled(not panel.running and not panel.busy)
-            self.prep_controls.setVisible(manual and self.prep_toggle.isChecked())
             self.empty_syringes.setVisible(not used)
             self.copy_button.setEnabled(any(owner.panels[a].confirmed_diameter is not None for a in used))
-            target = self.prep_pump.currentData()
+            target = getattr(owner,'selected_address',None)
             if [self.prep_pump.itemData(i) for i in range(self.prep_pump.count())] != used:
                 blocker = QSignalBlocker(self.prep_pump)
                 self.prep_pump.clear()
@@ -464,12 +423,16 @@ class Workflow(QWidget):
                 if target in used:
                     self.prep_pump.setCurrentIndex(self.prep_pump.findData(target))
                 del blocker
-            owner.refresh_preparation_controls()
+            if target in used:
+                blocker=QSignalBlocker(self.prep_pump)
+                self.prep_pump.setCurrentIndex(self.prep_pump.findData(target))
+                del blocker
+            if getattr(owner,'station_ready',False):owner.refresh_preparation_controls()
             self.refresh_review()
             hint, target_step = owner.workflow_hint()
             self.next_hint.setText(hint)
             self.next_button.setText('Go to required step' if target_step != self.step else 'Locate required field')
-            self.next_button.setVisible(self.step != 4 or target_step != 4)
+            self.next_button.setVisible((self.step != 4 or target_step != 4) and not (manual and self.step==3 and target_step==3))
             self.next_button.setEnabled(not owner.pending_tasks)
         finally:
             self.updating = False
@@ -525,4 +488,4 @@ class Workflow(QWidget):
         if simulation:
             self.review_note.setText('All included blocks count toward the totals. Preview playback sends no pump start commands.')
         else:
-            self.review_note.setText('Immediate priming is started in step 3. Optional startup Prime starts with the reviewed pumps. Start sends RUN to the listed pumps.')
+            self.review_note.setText('Use the pump cards to start, resume or stop. Write changed settings before starting.')

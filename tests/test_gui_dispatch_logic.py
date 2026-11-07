@@ -38,6 +38,8 @@ class FakePool:
         self.queue.sort(key=lambda item:item[0],reverse=True);self.queue.pop(0)[1].run()
 class Controller:
     is_connected=True
+    def send_command(self,address,command):
+        return parse_response(f'\x02{address:02d}S\x03'.encode(),address)
     def stop_pump(self,address):
         return [(address,'STATUS',parse_response(f'\x02{address:02d}S\x03'.encode(),address))]
 

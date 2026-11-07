@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 import math
 import re
 import threading
@@ -18,6 +19,10 @@ class PumpConnectionError(RuntimeError):
 
 class PumpTimeoutError(TimeoutError):
     pass
+
+
+class CommandCancelled(RuntimeError):
+    """A queued ordinary transaction was superseded by a stop request."""
 
 
 # NE-500 / NE-501 specified maximum pusher speed: 5.100464828 cm/min.
@@ -206,6 +211,7 @@ class NE501Controller:
         self.inter_command_delay = inter_command_delay
         self._serial = None
         self._lock = threading.RLock()
+        self._command_local = threading.local()
         self._last_command_at = 0.0
         self.port: Optional[str] = None
         self.baudrate = 19200
@@ -289,11 +295,27 @@ class NE501Controller:
             )
         raise PumpTimeoutError("Pump did not respond before timeout")
 
+    @contextmanager
+    def cancellable(self, current):
+        previous = getattr(self._command_local, 'current', None)
+        self._command_local.current = lambda: current() and (previous is None or previous())
+        try:
+            yield
+        finally:
+            self._command_local.current = previous
+
+    def check_command_current(self):
+        current = getattr(self._command_local, 'current', None)
+        if current is not None and not current():
+            raise CommandCancelled('Command cancelled after STOP request')
+
     def send_command(self, address: int, command: str) -> PumpResponse:
         with self._lock:
+            self.check_command_current()
             if not self.is_connected:
                 raise PumpConnectionError("Serial port is not connected")
             self._wait_inter_command_delay()
+            self.check_command_current()
             packet = build_command(address, command)
             try:
                 self._serial.reset_input_buffer()
