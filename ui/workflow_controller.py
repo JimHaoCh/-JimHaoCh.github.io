@@ -91,7 +91,7 @@ class WorkflowController:
             if not self.can_use_timeline():
                 return 'Stop the pumps and wait for pending commands before using the timeline.', self.workflow.step
             if timeline.running:
-                return 'Simulation is playing; use pause or stop to edit the flow.', 3
+                return 'Simulation is playing; pause or stop playback.', 3
         if self.workflow.step < 3:
             return ('Next: enter the manual delivery settings.' if manual else 'Next: edit the timeline; include any initial priming as blocks.'), 3
         if self.workflow.step == 3:

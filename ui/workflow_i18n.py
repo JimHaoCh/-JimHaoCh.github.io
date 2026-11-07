@@ -1,7 +1,7 @@
 """Traditional Chinese / English copy for the shared preparation workflow."""
 WORKFLOW_TEXT = [
 ('Operation mode', '操作模式'),
-('Simulation is playing; use pause or stop to edit the flow.', '模擬播放中；請先暫停或停止，再編輯流程。'),
+('Simulation is playing; pause or stop playback.', '模擬播放中；可暫停或停止播放。'),
 ('Review the timeline totals, then play the simulation.', '請核對流程總量，再開始模擬播放。'),
 ('Next: check the timeline before simulation.', '下一步：檢查流程，再開始模擬。'),
 ('Check pump paths, syringe diameters and the total delivery from all included blocks.', '請核對幫浦流路、針筒內徑，以及全部啟用區塊的輸送總量。'),
