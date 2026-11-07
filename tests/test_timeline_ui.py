@@ -261,6 +261,7 @@ class TimelineDesktopUITests(unittest.TestCase):
         settings_dir=tempfile.TemporaryDirectory()
         isolated_settings=QSettings(str(Path(settings_dir.name)/'settings.ini'),QSettings.Format.IniFormat)
         window=MainWindow({'addresses':[0,1,2,3],'port':'MOCK'},settings=isolated_settings)
+        window.load_example_workflow()
         try:
             for scale in (1,1.3):
                 self.app.setStyleSheet(build_stylesheet(scale))

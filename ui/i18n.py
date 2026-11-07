@@ -354,6 +354,9 @@ CATALOG.extend([
 ('Configuration error','設定檔錯誤'),
 ])
 
+from .workflow_i18n import WORKFLOW_TEXT
+CATALOG.extend(WORKFLOW_TEXT)
+
 _exact = {}
 _patterns = []
 def _pattern(template):

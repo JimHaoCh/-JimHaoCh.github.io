@@ -1,26 +1,15 @@
-NE-501 Pump Controller UI Preview v1.3.1
+NE-501 v1.4.0 quick start
 
-Single-pump workflow
-1. Select the COM port and click Connect and detect. Detection runs automatically after connection. Rescan pumps checks the connections again.
-2. Click Edit on a pump card. The settings heading and fixed action footer identify the pump and its actual address.
-3. Enter the actual syringe inside diameter and click Verify diameter. A verified diameter collapses to one line; use Change to edit it. A diameter change invalidates verification and clears that pump's group selection with a visible explanation.
-4. Set direction, main rate and unit, and Continuous or Target volume. The target volume applies to the main delivery phase.
-5. Enable Prime before delivery if needed. Choose one of the five levels and a Prime volume. Prime uses the selected direction and switches to the main rate afterward.
-6. Click 3 Apply and verify in the fixed settings footer. Incomplete active fields show an inline explanation. Start stays disabled until device verification succeeds.
-7. Click 4 Start pump in the same footer. Stop this pump is always in that footer; each card also retains its Start/Stop shortcuts. Stop all pumps stays at the top right. Check the device response to confirm stopping.
+1 Connect & map: connect real pumps or the mock controller, select pumps used in this experiment, and verify physical addresses and inlet paths.
+2 Syringes: enter actual inside diameters in mm. New plans start blank. Entered values and current device read-backs have separate labels.
+3 Tubing: confirm preparation, explicitly skip this time, or set up finite priming with a positive rate and volume. Write and start priming separately.
+4 Operation: choose manual delivery or timeline simulation. Set full units, direction and continuous/target mode. Startup Prime remains available under Advanced.
+5 Review & start: inspect the listed targets and volume stages. Write/read back manual settings, then explicitly start the reviewed pumps. Timeline playback is simulation only.
 
-Group controls
-Group becomes available after each pump's diameter is verified. Editing a pump and selecting it for group actions are separate choices. The group summary shows selection, readiness and addresses. A blocker identifies the pump and the required action. Resolve navigates to the relevant settings or status control without sending device commands.
-Apply selected, Start selected and Stop selected show their target count. All selected pumps must be verified before group start. Each pump uses its own settings. Existing queued-command cancellation and stop confirmation remain in use.
+Review buttons open the summary without moving pumps. Stop all remains in the top bar, cancels simulation and sends STOP to all configured addresses. Confirm each pump response. Warning windows leave the main window accessible.
 
-Display and status
-The four-step strip follows Diameter, Delivery, Verify and Start. Yellow outlines mark the current required action. The right settings area starts at about 500 px and the divider is draggable. Compact cards keep individual Stop controls visible at smaller window heights. Hover a compact card for its delivery mode and last device-report time.
-Last checked time is information; an unknown device state, alarm, changed diameter or unapplied setting has its own instruction. Auto refresh is optional and starts off. Busy communications skip its 2-second trigger.
-Language changes preserve values, drafts, connection and selection, and send no pump commands. Diagnostic TX/RX and CSV records retain device data.
+Shared syringe plans, selected tracks, fluid/inlet names and timeline blocks are saved in JSON. Manual delivery values and user/device confirmations belong to the current session. Imported files require a new preparation check; they never supply device read-back proof.
 
-Manual control sends commands to connected pumps. Timeline playback remains simulation only. Real pump flow, timing and synchronization require hardware validation. See DISCLAIMER.txt and BILINGUAL_MANUAL_UI_v1.3.1.md.
+Existing timeline drag, resize, split, copy, snapping, zoom, shortcuts, undo/redo, JSON, language and UI-size controls remain available. Unused tracks retain blocks and are skipped during simulation.
 
-v1.3.1 timeline syringe setup
-Use Syringes to configure the actual inside diameters for all used pumps. Manual verified read-backs can be copied explicitly into the plan. The inspector shows planned/device diameter, plunger speed and the representable device rate. Changes invalidate the flow check and are saved with the workflow. Legacy workflows require the missing diameters to be supplied; the example explicitly uses 10 mm example diameters.
-Flow is volumetric. Plunger speed equals flow in microlitres/min divided by syringe area in square millimetres. Preflight checks numeric representability and the manufacturer's mechanical range. Timeline playback remains simulation; the planning dialog sends no device commands.
-The update fixes four-digit integer zero truncation, loose read-back tolerances, diameter precision, same-file reload after Save, extreme numeric input, CSV filename collisions and invalid-address truncation. See SOURCE_AUDIT_v1.3.1.md.
+Windows x64 and Windows 11 ARM64 share the installer. See BILINGUAL_MANUAL_UI_v1.4.0.md and UI_REVIEW_v1.4.0.md for details and validation limits. Actual flow, tubing behavior and pump synchronization need hardware measurements.

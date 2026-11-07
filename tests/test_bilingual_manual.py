@@ -28,6 +28,9 @@ class BilingualManualTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory()
         self.settings=QSettings(str(Path(self.temp.name)/'preferences.ini'),QSettings.Format.IniFormat)
         self.win=MainWindow({'addresses':[0,1,2,3],'port':'MOCK'},settings=self.settings)
+        from ne501.timeline_model import example_timeline
+        self.win.timeline_editor._load_model(example_timeline([0,1,2,3]))
+        self.win.show_workflow_step(3)
         self.win.show();self.app.processEvents()
     def tearDown(self):
         self.win.poll_timer.stop();self.win.age_timer.stop()
@@ -41,6 +44,9 @@ class BilingualManualTests(unittest.TestCase):
         self.win.connection_label.setText('● Connected MOCK');self.win.connection_label.setObjectName('onlineStatus');self.win.connection_label.style().unpolish(self.win.connection_label);self.win.connection_label.style().polish(self.win.connection_label);self.win.connect_button.setText('Disconnect')
         self.win._set_group_buttons_enabled(True)
         for panel in self.win.panels.values():panel.set_online(True);panel.update_from_status('S')
+        self.win.preparation.mapping_confirmed=True
+        for a in self.win.addresses:self.win.preparation.confirm_tubing(a,'done')
+        self.win.refresh_group_controls()
     def wait_idle(self):
         deadline=time.monotonic()+10
         while self.win.pending_tasks and time.monotonic()<deadline:self.app.processEvents();time.sleep(.005)
@@ -256,7 +262,9 @@ class BilingualManualTests(unittest.TestCase):
         self.assertTrue(panel.editor_run_button.isEnabled())
         self.assertIn('Start pump 2',panel.step_banner.source_text)
         self.assertFalse(panel.is_active())
-        panel.editor_run_button.click();self.wait_idle()
+        panel.editor_run_button.click();self.app.processEvents()
+        self.assertEqual(self.win.workflow.step,4);self.assertFalse(panel.running)
+        self.win.workflow.review_start.click();self.wait_idle()
         self.assertTrue(panel.running)
         self.assertFalse(panel.editor_run_button.isEnabled())
         self.assertFalse(self.win.panels[0].running)

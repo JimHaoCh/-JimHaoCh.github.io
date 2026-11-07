@@ -132,6 +132,23 @@ class Menu(W.QMenu):
         if args and isinstance(args[0],str): args=(tr(args[0]),*args[1:])
         return super().addAction(*args)
 
+class NonModalNotice(W.QMessageBox):
+    def __init__(self, parent, title, text):
+        super().__init__(parent)
+        self.source_title, self.source_text = title, text
+        self.setIcon(W.QMessageBox.Icon.Warning)
+        self.setStandardButtons(W.QMessageBox.StandardButton.Ok)
+        self.setWindowModality(Qt.WindowModality.NonModal)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        manager.changed.connect(self.retranslate)
+        self.retranslate()
+
+    def retranslate(self):
+        self.setWindowTitle(tr(self.source_title))
+        self.setText(tr(self.source_text))
+        self.button(W.QMessageBox.StandardButton.Ok).setText(tr('OK'))
+
+
 class MessageBox:
     StandardButton=W.QMessageBox.StandardButton
     Icon=W.QMessageBox.Icon
@@ -160,6 +177,9 @@ class MessageBox:
         return MessageBox._show(parent,title,text,buttons,default,W.QMessageBox.Icon.Question)
     @staticmethod
     def warning(parent,title,text,buttons=None,default=None):
+        if parent is not None and hasattr(parent, 'show_nonmodal_warning') and buttons is None:
+            parent.show_nonmodal_warning(title, text)
+            return W.QMessageBox.StandardButton.Ok
         return MessageBox._show(parent,title,text,buttons or W.QMessageBox.StandardButton.Ok,default,W.QMessageBox.Icon.Warning)
     @staticmethod
     def information(parent,title,text,buttons=None,default=None):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .workflow_style import workflow_styles
 
 
 def build_stylesheet(scale: float = 1.0) -> str:
@@ -267,4 +268,4 @@ QScrollBar::handle:horizontal {{
     min-width: {px(24)}px;
     border-radius: {px(5)}px;
 }}
-"""
+""" + workflow_styles(scale)

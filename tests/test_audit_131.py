@@ -223,6 +223,7 @@ class AuditSyringeUITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             settings=QSettings(str(Path(folder)/'prefs.ini'),QSettings.Format.IniFormat)
             window=MainWindow({'addresses':[5,7,8,9]},settings=settings)
+            window.timeline_editor._load_model(example_timeline([5,7,8,9]))
             panel=window.panels[5];panel.set_online(True);panel.update_from_status('S');panel.confirm_diameter(4.699)
             self.assertEqual(window.timeline_editor.device_diameters[5],4.699)
             self.assertEqual(window.timeline_editor.model.diameters[0],10)
@@ -235,6 +236,7 @@ class AuditSyringeUITests(unittest.TestCase):
             self.assertEqual(window.timeline_editor.device_diameter_label.text(),'Device diameter: 4.699 mm')
             panel.open_diameter_editor();panel.diameter_input.setValue(4.700)
             self.assertIsNone(panel.confirmed_diameter);self.assertIsNone(window.timeline_editor.device_diameters[5])
+            window.timeline_editor.saved_snapshot=window.timeline_editor.model.to_json()
             window.close()
 
     def test_invalid_config_displays_an_error_before_creating_device_controls(self):

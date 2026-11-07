@@ -5,7 +5,7 @@ from dataclasses import replace
 import math
 
 from PySide6.QtCore import Qt, QRectF, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QFontMetrics, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QMenu, QWidget
 
 from ne501.timeline_model import Clip, Timeline, format_time
@@ -142,6 +142,8 @@ class TimelineCanvas(QWidget):
             selected = clip.id == self.selected
             invalid = self.drag and self.drag.get('candidate') == clip and not self.drag.get('valid', True)
             color = QColor('#ab3f48' if invalid else COLORS[clip.pump])
+            if not self.model.used[clip.pump]:
+                color = QColor('#37414f')
             p.setPen(QPen(QColor('white' if selected else '#b4c5d4'), 2 if selected else .7))
             p.setBrush(color)
             p.drawRoundedRect(r, 4, 4)
@@ -163,6 +165,8 @@ class TimelineCanvas(QWidget):
                 direction = '→ 推注' if clip.direction == 'INF' else '← 抽取'
                 available=max(0,round(min(r.right(),self.width()-self.RIGHT)-text_x-3))
                 title=tr(f'{direction}  {clip.rate:g} {clip.unit}')
+                if not self.model.used[clip.pump]:
+                    title = tr('Not included') + ' · ' + title
                 if p.fontMetrics().horizontalAdvance(title)>available:title=f'{"→" if clip.direction=="INF" else "←"} {clip.rate:g} {clip.unit}'
                 title=p.fontMetrics().elidedText(title,Qt.TextElideMode.ElideRight,available)
                 p.drawText(QRectF(text_x,r.top()+3,available,22),Qt.AlignmentFlag.AlignLeft,title)
@@ -194,21 +198,27 @@ class TimelineCanvas(QWidget):
         p.setClipRect(QRectF(0, self.TOP, self.LEFT - 3, self.height()-self.TOP))
         for pump in range(4):
             y = self.TOP + pump * row
-            p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(COLORS[pump]))
+            p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(COLORS[pump] if self.model.used[pump] else '#758093'))
             p.drawEllipse(QRectF(10, y + 19, 8, 8))
             p.setPen(QColor('#eff3f8'))
             f = QFont(self.font()); f.setBold(True)
             if row < 50: f.setPointSizeF(9.5)
             p.setFont(f)
-            p.drawText(26, round(y + (28 if row >= 50 else 21)), f'幫浦 {pump + 1}')
+            name = f'P{pump + 1} ' + self.model.names[pump]
+            name = QFontMetrics(f).elidedText(name, Qt.TextElideMode.ElideRight, self.LEFT - 32)
+            p.drawText(26, round(y + (28 if row >= 50 else 21)), name)
             f.setBold(False)
             if row < 50: f.setPointSizeF(8.5)
             p.setFont(f); p.setPen(QColor('#a5b3c4'))
-            p.drawText(26, round(y + (48 if row >= 50 else 39)), f'{self.model.addresses[pump]:02d} · 模擬')
+            path = f'{self.model.addresses[pump]:02d} · ' + (self.model.inlets[pump] or '模擬')
+            if not self.model.used[pump]:
+                path = f'{self.model.addresses[pump]:02d} · ' + tr('Not included')
+            path = QFontMetrics(f).elidedText(path, Qt.TextElideMode.ElideRight, self.LEFT - 32)
+            p.drawText(26, round(y + (48 if row >= 50 else 39)), path)
             if row >= 66:
                 diameter=self.model.diameters[pump]
                 f.setPointSizeF(8);p.setFont(f)
-                p.drawText(26,round(y+65),f'ID {diameter:g} mm' if diameter is not None else 'ID —')
+                p.drawText(26, round(y+65), 'Not included' if not self.model.used[pump] else f'ID {diameter:g} mm' if diameter is not None else 'ID —')
         p.restore()
         p.end()
 

@@ -40,7 +40,7 @@ try {
     if ($proc.ExitCode -ne 0 -or -not (Test-Path $report)) { throw 'Installed application smoke test failed.' }
     $smoke = Get-Content -Raw $report | ConvertFrom-Json
     if (-not $smoke.ok -or $smoke.python_platform -ne $expectedPlatform) { throw 'Wrong installed application architecture.' }
-    if ($smoke.version -ne $expectedVersion -or -not $smoke.guided_manual_workflow) { throw 'Installed version or guided manual workflow check failed.' }
+    if ($smoke.version -ne $expectedVersion -or -not $smoke.guided_manual_workflow -or -not $smoke.shared_preparation -or -not $smoke.bounded_priming) { throw 'Installed version or guided manual workflow check failed.' }
     $config = Join-Path $userData 'NE501_Timeline_UI_Preview\config.json'
     if (-not (Test-Path $config)) { throw 'User config was not created.' }
     $uninstaller = Join-Path $target 'unins000.exe'

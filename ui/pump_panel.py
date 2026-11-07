@@ -10,6 +10,8 @@ from PySide6.QtCore import QSignalBlocker, Signal
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from .i18n import manager
+from .unit_fields import preserve_quantity
+from ne501.syringe import FLOW_UL_MIN
 from .i18n_widgets import (
     Button as QPushButton, CheckBox as QCheckBox, ComboBox as QComboBox,
     GroupBox, Label as QLabel, SpinBox as QDoubleSpinBox,
@@ -42,11 +44,16 @@ class PumpPanel(GroupBox):
     active_changed = Signal(int, bool)
     edit_requested = Signal(int)
     state_changed = Signal()
+    shared_setup_requested = Signal()
 
     def __init__(self, address: int, parent=None, index=None):
         super().__init__('', parent)
         self.address = address
         self.index = index if index is not None else address + 1
+        self.workflow_managed = False
+        self.planned_diameter = None
+        self.external_start_blocker = ""
+        self.external_plan_pending = False
         self.confirmed_diameter = None
         self.settings_applied = False
         self.applied_snapshot = None
@@ -175,6 +182,11 @@ class PumpPanel(GroupBox):
         rate.addWidget(self.rate_unit_combo)
         detail.addWidget(QLabel('Rate'))
         detail.addLayout(rate)
+        self.unit_notice = QLabel()
+        self.unit_notice.setWordWrap(True)
+        self.unit_notice.setObjectName('pendingLabel')
+        self.unit_notice.hide()
+        detail.addWidget(self.unit_notice)
         self.direction_combo = QComboBox()
         self.direction_combo.addItem('Infuse', 'INF')
         self.direction_combo.addItem('Withdraw', 'WDR')
@@ -194,22 +206,28 @@ class PumpPanel(GroupBox):
         detail.addLayout(delivery)
         self.volume_input = QDoubleSpinBox()
         self.volume_input.setRange(.001, 9999)
-        self.volume_input.setDecimals(3)
+        self.volume_input.setDecimals(6)
+        self.volume_input.setMinimum(.000001)
         self.volume_input.setValue(1)
         self.volume_unit_combo = QComboBox()
         for label, code in VOLUME_UNITS:
             self.volume_unit_combo.addItem(label, code)
         self.volume_unit_combo.setCurrentIndex(1)
         self.target_widget = QWidget()
-        row = QHBoxLayout(self.target_widget)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(QLabel('Main target volume'))
+        target_layout = QVBoxLayout(self.target_widget)
+        target_layout.setContentsMargins(0, 0, 0, 0)
+        target_layout.addWidget(QLabel('Main target volume'))
+        row = QHBoxLayout()
         row.addWidget(self.volume_input, 1)
         row.addWidget(self.volume_unit_combo)
+        target_layout.addLayout(row)
         detail.addWidget(self.target_widget)
 
+        self.advanced_checkbox = QCheckBox('Advanced · startup Prime')
+        detail.addWidget(self.advanced_checkbox)
         self.prime_enabled_checkbox = QCheckBox('Prime before delivery')
         detail.addWidget(self.prime_enabled_checkbox)
+        self.advanced_checkbox.toggled.connect(self._refresh_enabled_state)
         self.prime_details = QWidget()
         prime = QVBoxLayout(self.prime_details)
         prime.setContentsMargins(0, 0, 0, 0)
@@ -225,13 +243,14 @@ class PumpPanel(GroupBox):
         prime.addWidget(self.prime_rate_preview)
         self.prime_volume_input = QDoubleSpinBox()
         self.prime_volume_input.setRange(.001, 9999)
-        self.prime_volume_input.setDecimals(3)
+        self.prime_volume_input.setDecimals(6)
+        self.prime_volume_input.setMinimum(.000001)
         self.prime_volume_input.setValue(100)
         self.prime_volume_unit_combo = QComboBox()
         for label, code in VOLUME_UNITS:
             self.prime_volume_unit_combo.addItem(label, code)
         row = QHBoxLayout()
-        row.addWidget(QLabel('Prime volume'))
+        prime.addWidget(QLabel('Prime volume'))
         row.addWidget(self.prime_volume_input, 1)
         row.addWidget(self.prime_volume_unit_combo)
         prime.addLayout(row)
@@ -277,8 +296,10 @@ class PumpPanel(GroupBox):
         bar.addWidget(self.footer_hint)
         self.apply_button = QPushButton('3 Apply and verify')
         self.apply_button.setObjectName('applyButton')
+        self.apply_button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.editor_run_button = QPushButton(f'4 Start pump {self.index}')
         self.editor_run_button.setObjectName('runButton')
+        self.editor_run_button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.editor_stop_button = QPushButton('Stop this pump')
         self.editor_stop_button.setObjectName('stopButton')
         actions = QHBoxLayout()
@@ -305,6 +326,12 @@ class PumpPanel(GroupBox):
             widget.valueChanged.connect(self.mark_settings_dirty)
             widget.lineEdit().textEdited.connect(self.mark_settings_dirty)
             widget.editingFinished.connect(self._refresh_enabled_state)
+        def unit_notice(text):
+            self.unit_notice.setText(text)
+            self.unit_notice.show()
+        preserve_quantity(self.rate_input, self.rate_unit_combo, FLOW_UL_MIN, unit_notice, lambda: self._internal_update)
+        preserve_quantity(self.volume_input, self.volume_unit_combo, {'UL': 1, 'ML': 1000}, unit_notice, lambda: self._internal_update)
+        preserve_quantity(self.prime_volume_input, self.prime_volume_unit_combo, {'UL': 1, 'ML': 1000}, unit_notice, lambda: self._internal_update)
         for widget in (self.prime_speed_combo, self.prime_volume_unit_combo, self.rate_unit_combo,
                        self.direction_combo, self.volume_unit_combo):
             widget.currentIndexChanged.connect(self.mark_settings_dirty)
@@ -312,6 +339,9 @@ class PumpPanel(GroupBox):
         self._refresh_enabled_state()
 
     def open_diameter_editor(self):
+        if self.workflow_managed:
+            self.shared_setup_requested.emit()
+            return
         self._diameter_editing = True
         self._refresh_enabled_state()
         self.diameter_input.setFocus()
@@ -398,6 +428,8 @@ class PumpPanel(GroupBox):
             self.invalidate_diameter('Diameter changed — SET & VERIFY again')
 
     def _on_prime_toggled(self, *_):
+        if self.prime_enabled_checkbox.isChecked():
+            self.advanced_checkbox.setChecked(True)
         self.mark_settings_dirty()
 
     def _mode_changed(self, *_):
@@ -563,6 +595,8 @@ class PumpPanel(GroupBox):
         return errors[0][1] if errors else ''
 
     def start_blocker(self):
+        if self.workflow_managed and self.external_start_blocker:
+            return self.external_start_blocker
         blocker = self.configuration_blocker()
         if blocker:
             return blocker
@@ -644,7 +678,7 @@ class PumpPanel(GroupBox):
         elif self._compact and self.input_errors():
             card_guidance = 'Complete the input fields.'
         self.ready_label.setText(card_guidance)
-        self.ready_label.setVisible(not self.running or self.stop_pending or self.last_status is None)
+        self.ready_label.setVisible((not self.workflow_managed or not self._compact) and (not self.running or self.stop_pending or self.last_status is None))
         style = 'successLabel' if not self.start_blocker() else 'secondaryLabel' if self.running else 'pendingLabel'
         if self.ready_label.objectName() != style:
             self.ready_label.setObjectName(style)
@@ -696,27 +730,48 @@ class PumpPanel(GroupBox):
     def refresh_age(self):
         self._refresh_summary()
 
+    def update_shared_plan(self, used, diameter, blocker, pending=False):
+        self.external_plan_pending = pending
+        changed = self.planned_diameter != diameter
+        self.planned_diameter = diameter
+        self.external_start_blocker = 'Finish entering a valid inside diameter.' if pending else blocker
+        self._internal_update = True
+        self.diameter_input.setValue(diameter or 0)
+        self._internal_update = False
+        if changed and self.confirmed_diameter is not None and (diameter is None or not math.isclose(diameter, self.confirmed_diameter, rel_tol=0, abs_tol=1e-9)):
+            self.invalidate_diameter('Diameter changed — SET & VERIFY again')
+        self._refresh_enabled_state()
+
     def _refresh_enabled_state(self):
         can_set = self.online and self.last_status not in (None, 'A') and not self.running and not self.busy and not self.stop_pending
         ready = self.online and self.confirmed_diameter is not None
         configure = ready and self.last_status not in (None, 'A') and not self.running and not self.busy and not self.stop_pending
-        self.diameter_fields.setVisible(self._diameter_editing or not ready)
-        self.change_diameter_button.setVisible(ready and not self._diameter_editing)
-        self.change_diameter_button.setEnabled(can_set)
+        self.diameter_fields.setVisible(not self.workflow_managed and (self._diameter_editing or not ready))
+        self.change_diameter_button.setVisible(self.workflow_managed or ready and not self._diameter_editing)
+        self.change_diameter_button.setEnabled(not self.busy and not self.running if self.workflow_managed else can_set)
         self.diameter_input.setEnabled(can_set)
         self.set_diameter_button.setEnabled(can_set and self.diameter_input.hasAcceptableInput())
+        editable = not self.running and not self.busy and not self.stop_pending if self.workflow_managed else configure
         for widget in (self.rate_input, self.rate_unit_combo, self.direction_combo, self.mode_combo,
                        self.continuous_checkbox, self.prime_enabled_checkbox):
-            widget.setEnabled(configure)
+            widget.setEnabled(editable)
         self.target_widget.setVisible(not self.continuous_checkbox.isChecked())
-        self.volume_input.setEnabled(configure and not self.continuous_checkbox.isChecked())
-        self.volume_unit_combo.setEnabled(configure and not self.continuous_checkbox.isChecked())
+        self.volume_input.setEnabled(editable and not self.continuous_checkbox.isChecked())
+        self.volume_unit_combo.setEnabled(editable and not self.continuous_checkbox.isChecked())
         prime_on = self.prime_enabled_checkbox.isChecked()
-        self.prime_details.setVisible(prime_on)
+        advanced = self.advanced_checkbox.isChecked()
+        self.prime_enabled_checkbox.setVisible(advanced)
+        self.prime_details.setVisible(prime_on and advanced)
         for widget in (self.prime_speed_combo, self.prime_volume_input, self.prime_volume_unit_combo):
-            widget.setEnabled(configure and prime_on)
-        self.active_checkbox.setEnabled(ready and not self.busy)
-        self.apply_button.setEnabled(configure and not self.input_errors())
+            widget.setEnabled(editable and prime_on)
+        group_ready = self.online and self.planned_diameter is not None and not self.external_start_blocker.startswith("Select") if self.workflow_managed else ready
+        self.active_checkbox.setEnabled(group_ready and not self.busy)
+        writable = can_set and self.planned_diameter is not None and not self.external_plan_pending if self.workflow_managed else configure
+        self.apply_button.setEnabled(writable and not self.input_errors())
+        if self.workflow_managed:
+            self.apply_button.setText("Write & verify")
+            self.editor_run_button.setText("Review this pump")
+            self.editor_run_button.setObjectName("secondaryButton")
         apply_style = 'secondaryButton' if self.settings_applied else 'applyButton'
         if self.apply_button.objectName() != apply_style:
             self.apply_button.setObjectName(apply_style)

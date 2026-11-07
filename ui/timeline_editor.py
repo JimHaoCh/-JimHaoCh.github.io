@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import time
 
-from PySide6.QtCore import Qt, QTimer, QSaveFile, QIODevice
+from PySide6.QtCore import Qt, QTimer, QSaveFile, QIODevice, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFormLayout,
@@ -18,6 +18,8 @@ from ne501.timeline_model import Clip, Timeline, UNITS, example_timeline, format
 from ne501.pump_numbers import normalize_rate
 from .syringe_dialog import SyringeDialog
 from .timeline_canvas import TimelineCanvas
+from .unit_fields import preserve_quantity
+from ne501.syringe import FLOW_UL_MIN
 
 from .i18n_widgets import Label as QLabel, Button as QPushButton, ComboBox as QComboBox, CheckBox as QCheckBox, SpinBox as QDoubleSpinBox, MessageBox as QMessageBox, FileDialog as QFileDialog
 
@@ -35,8 +37,13 @@ class FocusComboBox(QComboBox):
 
 
 class TimelineEditor(QWidget):
+    plan_changed = Signal()
+    project_loaded = Signal()
+    state_changed = Signal()
+    setup_requested = Signal()
     def __init__(self, addresses: list[int] | None = None, parent=None):
         super().__init__(parent)
+        self.external_setup = False
         self.model = example_timeline(addresses)
         self.config_addresses = tuple(self.model.addresses)
         self.history: list[Timeline] = []
@@ -88,8 +95,9 @@ class TimelineEditor(QWidget):
         self.inspector_button = QPushButton('區塊設定')
         self.syringe_button = QPushButton('Syringes (4/4)')
         self.inspector_button.setCheckable(True); self.inspector_button.setChecked(True)
-        for b in (self.new_button, self.open_button, self.save_button, self.save_as_button, self.syringe_button, self.inspector_button): header.addWidget(b)
+        for b in (self.new_button, self.open_button, self.save_button, self.save_as_button, self.inspector_button): header.addWidget(b)
         root.addLayout(header)
+        root.addWidget(self.syringe_button)
         transport = QHBoxLayout()
         self.home_button = QPushButton('|◀ 起點')
         self.check_button = QPushButton('1 檢查流程')
@@ -154,7 +162,7 @@ class TimelineEditor(QWidget):
         self.splitter.addWidget(left)
         self.inspector = QFrame(); self.inspector.setObjectName('timelineInspector')
         side = QVBoxLayout(self.inspector); side.setContentsMargins(10, 5, 10, 5)
-        self.selected_label = QLabel('區塊設定'); self.selected_label.setStyleSheet('font-weight: 700;')
+        self.selected_label = QLabel('區塊設定'); self.selected_label.setWordWrap(True); self.selected_label.setTextFormat(Qt.TextFormat.PlainText); self.selected_label.setStyleSheet('font-weight: 700;')
         side.addWidget(self.selected_label)
         form = QFormLayout(); form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.start_spin = self._time_spin(); self.end_spin = self._time_spin()
@@ -175,13 +183,21 @@ class TimelineEditor(QWidget):
         self.diameter_mismatch_label.hide()
         self.plunger_label = QLabel(); self.plunger_label.setWordWrap(True)
         self.command_rate_label = QLabel(); self.command_rate_label.setWordWrap(True)
+        self.conversion_toggle = QCheckBox('Conversion & advanced info')
+        side.addWidget(self.conversion_toggle)
+        conversion = QWidget()
+        conversion_layout = QVBoxLayout(conversion)
+        conversion_layout.setContentsMargins(0, 0, 0, 0)
+        conversion.hide()
+        self.conversion_toggle.toggled.connect(conversion.setVisible)
         for label in (self.diameter_label, self.device_diameter_label,
                       self.plunger_label, self.command_rate_label):
             label.setObjectName('secondaryLabel')
-            side.addWidget(label)
+            conversion_layout.addWidget(label)
+        side.addWidget(conversion)
         side.addWidget(self.diameter_mismatch_label)
         row = QHBoxLayout()
-        self.apply_button = QPushButton('套用'); self.apply_button.setObjectName('applyButton')
+        self.apply_button = QPushButton('Finish block edit'); self.apply_button.setObjectName('applyButton')
         self.cancel_button = QPushButton('取消')
         row.addWidget(self.apply_button); row.addWidget(self.cancel_button); side.addLayout(row)
         row = QHBoxLayout()
@@ -236,6 +252,7 @@ class TimelineEditor(QWidget):
             control.valueChanged.connect(self.mark_dirty)
             control.lineEdit().textEdited.connect(self.mark_text_pending)
             control.lineEdit().returnPressed.connect(self.apply_clip)
+        preserve_quantity(self.rate_spin, self.unit_combo, FLOW_UL_MIN, self.show_notice, lambda: self.loading)
         for control in (self.direction_combo, self.unit_combo): control.currentIndexChanged.connect(self.mark_dirty)
         self.duration_spin.valueChanged.connect(self.mark_duration_dirty)
         self.duration_spin.lineEdit().textEdited.connect(self.mark_duration_text_pending)
@@ -275,11 +292,26 @@ class TimelineEditor(QWidget):
     def _track_from_combo(self, index):
         self.canvas.active_track = index; self.canvas.update()
 
+    def set_preparation(self, diameters, used, names, inlets):
+        if self.busy() or self.pending():
+            self.show_notice('Finish or cancel the current edit before changing preparation.')
+            return False
+        candidate = self.model.copy()
+        candidate.set_preparation(diameters, used, names, inlets)
+        if candidate.to_json() != self.model.to_json():
+            self.remember()
+            self.model = candidate
+            self.after_change('Preparation plan updated.')
+        return True
+
     def set_device_diameters(self, values):
         self.device_diameters = dict(values)
         self.refresh_syringe_preview()
 
     def edit_syringes(self):
+        if self.external_setup:
+            self.setup_requested.emit()
+            return
         if self.busy() or self.pending():return
         self.canvas.cancel_drag()
         dialog = SyringeDialog(self.model.addresses,self.model.diameters,self.device_diameters,self)
@@ -379,7 +411,12 @@ class TimelineEditor(QWidget):
             self.canvas.selected = clip.id if clip else None
             if clip:
                 self.canvas.active_track = clip.pump; self._select_track(clip.pump)
-                self.selected_label.setText(f'幫浦 {clip.pump+1} · 區塊設定')
+                identity = f'P{clip.pump + 1} · {self.model.addresses[clip.pump]:02d}'
+                if self.model.names[clip.pump]:
+                    identity += ' · ' + self.model.names[clip.pump]
+                if self.model.inlets[clip.pump]:
+                    identity += ' → ' + self.model.inlets[clip.pump]
+                self.selected_label.setText(identity)
                 self.start_spin.setMaximum(self.model.total / 10); self.end_spin.setMaximum(self.model.total / 10)
                 self.start_spin.setValue(clip.start/10); self.end_spin.setValue(clip.end/10)
                 self.direction_combo.setCurrentIndex(self.direction_combo.findData(clip.direction))
@@ -406,6 +443,7 @@ class TimelineEditor(QWidget):
         self.loading = True; self.duration_spin.setValue(self.model.total/10); self.loading = False
         self.select_clip(self.canvas.selected or '')
         self.show_notice(message + ' 請重新檢查流程。')
+        self.plan_changed.emit()
         self.update_controls()
 
     def record_drag(self, old):
@@ -415,7 +453,7 @@ class TimelineEditor(QWidget):
         if self.busy() or self.pending(): return
         # A double click inserts exactly in that gap, with a visible default length.
         next_start = min((c.start for c in self.model.clips if c.pump == pump and c.start > tick), default=self.model.total)
-        if any(c.pump == pump and c.start <= tick < c.end for c in self.model.clips) or tick >= self.model.total:
+        if any(c.pump == pump and c.start <= tick < c.end for c in self.model.included_clips()) or tick >= self.model.total:
             self.show_notice('此位置已有區塊，請選擇空白時間。'); return
         length = min(150, next_start-tick)
         if length < 1: return
@@ -521,7 +559,7 @@ class TimelineEditor(QWidget):
         if self.busy() or self.pending(): return
         try:
             self.model.validate()
-            if not self.model.clips: raise ValueError('請先新增至少一個區塊。')
+            if not self.model.included_clips(): raise ValueError('請先新增至少一個區塊。')
             self.model.validate_syringes()
         except ValueError as exc:
             self.checked = False; self.show_notice(str(exc)); self.update_controls(); return
@@ -649,6 +687,8 @@ class TimelineEditor(QWidget):
         self.canvas.set_view(model.total, 0)
         self.loading = True; self.duration_spin.setValue(model.total/10); self.loading = False
         self.select_clip(self.canvas.selected or ''); self.update_controls()
+        self.plan_changed.emit()
+        self.project_loaded.emit()
 
     def _read_model_file(self,path):
         if path.stat().st_size > 1_048_576:raise ValueError('流程檔超過 1 MB。')
@@ -704,16 +744,17 @@ class TimelineEditor(QWidget):
 
     def update_controls(self):
         busy, pending = self.busy(), self.pending()
-        missing=any(self.model.diameters[c.pump] is None for c in self.model.clips)
-        self.syringe_button.setText(f'Syringes ({sum(d is not None for d in self.model.diameters)}/4)')
+        missing=any(self.model.diameters[c.pump] is None for c in self.model.included_clips())
+        self.syringe_button.setText('2 Syringe setup')
+        self.syringe_button.setObjectName('diameterButton')
         self.syringe_button.setEnabled(not busy and not pending)
         self.syringe_button.setStyleSheet('border: 2px solid #ffd166;' if missing and not busy and not pending else '')
         has_clip = self.model.get(self.canvas.selected) is not None
         self.canvas.editable = not busy and not pending
         self.canvas.seek_enabled = not self.running and not pending
-        self.check_button.setEnabled(not busy and not pending and not missing and bool(self.model.clips))
-        self.play_button.setEnabled(not self.running and not pending and self.checked and bool(self.model.clips))
-        self.play_button.setText('▶ 繼續' if self.paused else '2 ▶ 播放')
+        self.check_button.setEnabled(not busy and not pending and not missing and bool(self.model.included_clips()))
+        self.play_button.setEnabled(not self.running and not pending and self.checked and bool(self.model.included_clips()))
+        self.play_button.setText('Resume simulation' if self.paused else 'Play simulation')
         self.pause_button.setEnabled(self.running); self.stop_button.setEnabled(busy)
         self.home_button.setEnabled(not pending and (busy or self.playhead > 0))
         self.speed_combo.setEnabled(not busy)
@@ -740,6 +781,7 @@ class TimelineEditor(QWidget):
         elif not self.checked: guide = '編輯後，按「1 檢查流程」再播放。'
         else: guide = '資料已檢查 · 按播放或時間軌空白鍵開始模擬。'
         self.guide.setText(guide)
+        self.state_changed.emit()
         for button, highlight in ((self.apply_button, self.dirty), (self.duration_apply, self.duration_dirty),
                                   (self.add_button, not self.model.clips and not pending and not busy),
                                   (self.check_button, bool(self.model.clips) and not self.checked and not pending and not busy),

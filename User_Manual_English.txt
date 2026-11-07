@@ -1,4 +1,4 @@
-For v1.3.1 screen labels and operation order, start with BILINGUAL_UI_QUICK_START_en.txt. The following earlier-version manual is retained as a controller and communications reference.
+For v1.4.0 screen labels and operation order, start with BILINGUAL_UI_QUICK_START_en.txt. The following earlier-version manual is retained as a controller and communications reference.
 
                                                                              NE-501 Multi Pump Controller v1.0.0 | English Operation Manual
 

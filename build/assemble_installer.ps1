@@ -14,7 +14,7 @@ $iscc = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -F
 if (-not $iscc) { throw 'Install Inno Setup 6.3+ or 7, then run this script again.' }
 & $iscc 'build\installer.iss'
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
-$installer = 'release\NE501_UI_v1.3.1_Setup.exe'
+$installer = 'release\NE501_UI_v1.4.0_Setup.exe'
 if (-not (Test-Path $installer)) { throw 'The installer file was not produced.' }
 Get-FileHash $installer -Algorithm SHA256 | Format-List
 Write-Host "Installer ready: $installer"

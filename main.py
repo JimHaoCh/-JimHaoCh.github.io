@@ -92,6 +92,9 @@ def run_smoke_test(report_path: Path) -> int:
     if window.timeline_editor is None or len(window.timeline_editor.model.addresses) != 4:
         raise RuntimeError("Four-track timeline preview is missing")
     timeline = window.timeline_editor
+    if timeline.model.diameters != [None] * 4 or window.preparation.used_addresses():
+        raise RuntimeError('A new experiment must start with blank syringe plans')
+    window.load_example_workflow()
     if not window.grab().save(str(report_path.parent / 'timeline-preview.png')):
         raise RuntimeError('Unable to render timeline preview screenshot')
     for language in ('zh_TW','en'):
@@ -102,6 +105,7 @@ def run_smoke_test(report_path: Path) -> int:
             if not window.grab().save(str(report_path.parent / f'{name}-{language}.png')):
                 raise RuntimeError('UI screenshot failed')
     manager.set_language('zh_TW')
+    window.show_workflow_step(3)
     window.mode_tabs.setCurrentIndex(1)
     timeline.canvas.grab()
     timeline.check_flow()
@@ -144,6 +148,11 @@ def run_smoke_test(report_path: Path) -> int:
     if not all(panel.last_status == "S" and panel.last_response_source == "STOP confirmed by pump response" for panel in window.panels.values()):
         raise RuntimeError("Simulated STOP ALL did not confirm every pump")
     window.mode_tabs.setCurrentIndex(0)
+    window.show_workflow_step(0)
+    window.workflow.mapping_check.setChecked(True)
+    for address in window.preparation.used_addresses():
+        window.change_tubing(address, 'skipped')
+    window.show_workflow_step(3)
     window.select_pump(0)
     panel = window.panels[0]
     panel.set_diameter_button.click()
@@ -151,9 +160,30 @@ def run_smoke_test(report_path: Path) -> int:
     panel.apply_button.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.settings_applied, 'fixed-footer apply and read-back')
     panel.editor_run_button.click()
+    if window.workflow.step != 4 or panel.running:
+        raise RuntimeError('Manual start must first show the review page')
+    window.workflow.review_start.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.running, 'fixed-footer start')
     panel.editor_stop_button.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'S' and not panel.running, 'fixed-footer stop')
+    window.show_workflow_step(2)
+    window.change_tubing(0, 'needed')
+    window.workflow.prep_rate.setValue(10)
+    window.workflow.prep_volume.setValue(5)
+    window.workflow.prep_write.click()
+    wait_until(lambda: window.pending_tasks == 0 and window.workflow.prep_start.isEnabled(), 'bounded priming write/read-back')
+    window.workflow.prep_start.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.running, 'explicit priming start')
+    window.workflow.prep_stop.click()
+    wait_until(lambda: window.pending_tasks == 0 and not panel.running, 'priming stop')
+    if panel.settings_applied:
+        raise RuntimeError('Priming must not arm the main delivery')
+    for language in ('zh_TW', 'en'):
+        manager.set_language(language)
+        for step in range(5):
+            window.show_workflow_step(step)
+            app.processEvents()
+            window.grab().save(str(report_path.parent / f'workflow-step{step + 1}-{language}.png'))
     window.controller.disconnect()
     window.controller = None
     QTimer.singleShot(300, app.quit)
@@ -168,6 +198,8 @@ def run_smoke_test(report_path: Path) -> int:
         "simulation_pumps": 4,
         "timeline_preview": True,
         "guided_manual_workflow": True,
+        "shared_preparation": True,
+        "bounded_priming": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")

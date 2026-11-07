@@ -11,6 +11,7 @@ from typing import Any
 from uuid import uuid4
 from .syringe import format_diameter, plunger_speed_mm_min, MIN_LINEAR_SPEED_MM_MIN, MAX_LINEAR_SPEED_MM_MIN
 from .pump_numbers import normalize_rate
+from .preparation import PumpPlan
 
 TICKS_PER_SECOND = 10
 MAX_DURATION_TICKS = 7 * 24 * 60 * 60 * TICKS_PER_SECOND
@@ -63,11 +64,16 @@ class Timeline:
     """Four channels mapped to logical pump indices 0-3."""
 
     def __init__(self, total: int = 1200, clips: list[Clip] | None = None, addresses: list[int] | None = None,
-                 diameters: list[float | None] | None = None):
+                 diameters: list[float | None] | None = None,
+                 used: list[bool] | None = None, names: list[str] | None = None,
+                 inlets: list[str] | None = None):
         self.total = total
         self.clips = list(clips or [])
         self.addresses = list(addresses if addresses is not None else [0, 1, 2, 3])
         self.diameters = list(diameters if diameters is not None else [None] * 4)
+        self.used = list(used if used is not None else [any(c.pump == p for c in self.clips) for p in range(4)])
+        self.names = list(names if names is not None else [''] * 4)
+        self.inlets = list(inlets if inlets is not None else [''] * 4)
         self.validate()
 
     def validate(self) -> None:
@@ -83,6 +89,10 @@ class Timeline:
         for value in self.diameters:
             if value is not None:
                 format_diameter(value)
+        if any(len(values) != 4 for values in (self.used, self.names, self.inlets)):
+            raise ValueError('Exactly four pump plans are required.')
+        for p in range(4):
+            PumpPlan(self.used[p], self.diameters[p], self.names[p], self.inlets[p]).validate()
         ids: set[str] = set()
         for clip in self.clips:
             if not isinstance(clip, Clip) or not isinstance(clip.id, str) or not clip.id or len(clip.id) > 100 or clip.id in ids:
@@ -106,11 +116,19 @@ class Timeline:
                     raise ValueError(f'幫浦 {pump + 1} 的時間區塊不可重疊。')
 
     def copy(self) -> Timeline:
-        return Timeline(self.total, self.clips.copy(), self.addresses, self.diameters)
+        return Timeline(self.total, self.clips.copy(), self.addresses, self.diameters, self.used, self.names, self.inlets)
 
     def set_diameters(self, diameters: list[float | None]) -> None:
-        candidate = Timeline(self.total, self.clips, self.addresses, diameters)
+        candidate = Timeline(self.total, self.clips, self.addresses, diameters, self.used, self.names, self.inlets)
         self.diameters = candidate.diameters
+
+    def set_preparation(self, diameters, used, names, inlets):
+        candidate = Timeline(self.total, self.clips, self.addresses, diameters, used, names, inlets)
+        self.diameters, self.used = candidate.diameters, candidate.used
+        self.names, self.inlets = candidate.names, candidate.inlets
+
+    def included_clips(self):
+        return [c for c in self.clips if self.used[c.pump]]
 
     def plunger_speed(self, clip: Clip) -> float | None:
         diameter = self.diameters[clip.pump]
@@ -118,10 +136,10 @@ class Timeline:
 
     def validate_syringes(self) -> None:
         self.validate()
-        for pump in sorted({c.pump for c in self.clips}):
+        for pump in sorted({c.pump for c in self.included_clips()}):
             if self.diameters[pump] is None:
                 raise ValueError(f'Pump {pump + 1}: set the syringe inside diameter before checking the flow.')
-        for clip in self.clips:
+        for clip in self.included_clips():
             normalize_rate(clip.rate, dict(zip(UNITS, ('UM', 'MM', 'UH', 'MH')))[clip.unit])
             speed = self.plunger_speed(clip)
             if speed is not None and not MIN_LINEAR_SPEED_MM_MIN * (1 - 1e-9) <= speed <= MAX_LINEAR_SPEED_MM_MIN * (1 + 1e-9):
@@ -134,13 +152,16 @@ class Timeline:
         if self.get(clip.id) is None:
             raise ValueError('找不到選取區塊。')
         candidate = [clip if c.id == clip.id else c for c in self.clips]
-        Timeline(self.total, candidate, self.addresses, self.diameters)
+        Timeline(self.total, candidate, self.addresses, self.diameters, self.used, self.names, self.inlets)
         self.clips = candidate
 
     def add(self, clip: Clip) -> None:
         candidate = self.clips + [clip]
-        Timeline(self.total, candidate, self.addresses, self.diameters)
+        used = self.used.copy()
+        used[clip.pump] = True
+        Timeline(self.total, candidate, self.addresses, self.diameters, used, self.names, self.inlets)
         self.clips = candidate
+        self.used = used
 
     def delete(self, clip_id: str) -> None:
         if self.get(clip_id) is None:
@@ -148,7 +169,7 @@ class Timeline:
         self.clips = [c for c in self.clips if c.id != clip_id]
 
     def set_total(self, total: int) -> None:
-        Timeline(total, self.clips, self.addresses, self.diameters)
+        Timeline(total, self.clips, self.addresses, self.diameters, self.used, self.names, self.inlets)
         self.total = total
 
     def split(self, clip_id: str, tick: int) -> Clip:
@@ -160,7 +181,7 @@ class Timeline:
         left = replace(clip, end=tick)
         right = replace(clip, id=uuid4().hex, start=tick)
         candidate = [left if c.id == clip.id else c for c in self.clips] + [right]
-        Timeline(self.total, candidate, self.addresses, self.diameters)
+        Timeline(self.total, candidate, self.addresses, self.diameters, self.used, self.names, self.inlets)
         self.clips = candidate
         return right
 
@@ -184,13 +205,14 @@ class Timeline:
         return Clip(uuid4().hex, pump, cursor, cursor + duration, direction, rate, unit)
 
     def active(self, ticks: float) -> list[Clip]:
-        return [c for c in self.clips if c.start <= ticks < c.end]
+        return [c for c in self.included_clips() if c.start <= ticks < c.end]
 
     def to_json(self) -> str:
         self.validate()
         data = {'format': FORMAT, 'version': 1, 'duration': self.total / 10,
                 'tracks': [{'id': p + 1, 'address': f'{self.addresses[p]:02d}',
-                            'diameter_mm': self.diameters[p],
+                            'diameter_mm': self.diameters[p], 'used': self.used[p],
+                            'fluid': self.names[p], 'inlet': self.inlets[p],
                             'blocks': [{'id': c.id, 'start': c.start / 10, 'end': c.end / 10,
                                         'direction': c.direction, 'rate': c.rate, 'unit': c.unit}
                                        for c in sorted(self.clips, key=lambda c: c.start) if c.pump == p]}
@@ -212,11 +234,15 @@ class Timeline:
             clips: list[Clip] = []
             addresses: list[int] = []
             diameters: list[float | None] = []
+            used, names, inlets = [], [], []
             for p, t in enumerate(tracks):
                 if not isinstance(t, dict) or type(t.get('id')) is not int or t.get('id') != p + 1 or not isinstance(t.get('address'), str) or len(t['address']) != 2 or not t['address'].isascii() or not t['address'].isdigit() or not isinstance(t.get('blocks'), list):
                     raise ValueError('幫浦軌道資料不正確。')
                 addresses.append(int(t['address']))
                 diameters.append(t.get('diameter_mm'))
+                used.append(t.get('used', bool(t['blocks'])))
+                names.append(t.get('fluid', ''))
+                inlets.append(t.get('inlet', ''))
                 if len(t['blocks']) > 200:
                     raise ValueError('單一幫浦的區塊超過 200 個。')
                 for b in t['blocks']:
@@ -224,7 +250,7 @@ class Timeline:
                         raise ValueError('區塊資料必須為物件。')
                     clips.append(Clip(b['id'], p, tick_from_seconds(b['start']), tick_from_seconds(b['end']),
                                       b['direction'], b['rate'], b['unit']))
-            return cls(total, clips, addresses, diameters)
+            return cls(total, clips, addresses, diameters, used, names, inlets)
         except (KeyError, TypeError, json.JSONDecodeError, UnicodeError, RecursionError) as exc:
             raise ValueError('無法讀取流程檔，請確認格式。') from exc
 
