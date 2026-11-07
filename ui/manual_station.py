@@ -221,13 +221,18 @@ class ManualStationController:
                     diameter=controller.set_diameter(a,program.diameter_mm)
                     result=write_manual_program(controller,a,program,prime) if diameter.confirmed else None
                     results.append((a,diameter,result,None))
-                except CommandCancelled:break
+                except CommandCancelled:
+                    results.append((a,None,None,'CANCELLED'));break
                 except Exception as exc:results.append((a,None,None,str(exc)))
             return results
         def success(results):
             saved={a:(s,p,prime,plan) for a,s,p,prime,plan in plans}
             for a,diameter,result,error in results:
                 panel=self.panels[a];settings,program,prime,plan=saved[a]
+                if error=='CANCELLED':
+                    panel.set_last_response('Write interrupted by STOP; write and verify again.')
+                    self.append_log(f'Pump {panel.index}: Write interrupted by STOP; write and verify again.')
+                    continue
                 if diameter:
                     self.log_response(a,'DIA '+format_diameter(program.diameter_mm),diameter.set_response)
                     self.log_response(a,'DIA',diameter.query_response)
@@ -316,6 +321,7 @@ class ManualStationController:
 
     def hold_station(self,addresses):
         if not self.controller or not self.controller.is_connected or not addresses:return
+        self._packet_epoch+=1
         panels=[self.panels[a] for a in addresses]
         for p in panels:
             self._pump_generation[p.address]=self._pump_generation.get(p.address,0)+1

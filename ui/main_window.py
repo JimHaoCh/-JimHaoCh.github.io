@@ -5,7 +5,7 @@ from typing import Callable, Optional
 from PySide6.QtCore import QEvent, QSettings, QThreadPool, Qt, QTimer, QSignalBlocker
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QApplication, QGridLayout, QHBoxLayout, QMainWindow, QScrollArea, QSizePolicy, QSplitter, QVBoxLayout, QWidget, QStackedWidget, QTabWidget
-from ne501.controller import NE501Controller, ProgramSettings
+from ne501.controller import NE501Controller, ProgramSettings, CommandCancelled
 from ne501 import __version__
 from ne501.syringe import format_diameter
 from ne501.preparation import PreparationState
@@ -46,7 +46,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         self.settings=settings if settings is not None else QSettings('NE501Controller','NE501 Timeline UI Preview')
         manager.set_language(str(self.settings.value('language','zh_TW')))
         self.pending_tasks=0;self.task_gate=TaskGate();self._panel_pending={}
-        self._active_workers=set();self._active_callbacks=set();self._pump_generation={}
+        self._active_workers=set();self._active_callbacks=set();self._pump_generation={};self._packet_epoch=0
         self.resize(1280,850)
         self.language_combo=QComboBox();self.language_combo.addItem('繁體中文','zh_TW');self.language_combo.addItem('English','en')
         self.language_combo.setCurrentIndex(self.language_combo.findData(manager.language))
@@ -379,7 +379,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
                     if phase and phase.ok and phase.data.strip().isdigit():panel.station_phase=int(phase.data)
                     self.process_results([(address,'STATUS',response)])
                     if phase:self.log_response(address,'PHN',phase)
-        self.run_task(action,success,panels=list(self.panels.values()),priority=-10)
+        self.run_task(action,success,panels=list(self.panels.values()),priority=-10,lock_panels=False)
 
     def refresh_ports(self) -> None:
         selected = self.port_combo.currentData() or self.settings.value(
@@ -722,7 +722,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.log_view.appendPlainText(f"[{timestamp}] {message}")
 
-    def run_task(self,action:Callable,on_success:Optional[Callable]=None,panels=None,priority=0,stop_ticket=None,allow_partial=False,stop_operation=False):
+    def run_task(self,action:Callable,on_success:Optional[Callable]=None,panels=None,priority=0,stop_ticket=None,allow_partial=False,stop_operation=False,lock_panels=True):
         ticket=stop_ticket if stop_ticket is not None else self.task_gate.ordinary_ticket()
         if ticket is None:
             self.append_log('Operation skipped while STOP ALL is in progress');return
@@ -733,11 +733,18 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             return self.task_gate.is_current(ticket) and (stop_ticket is not None or stop_operation or all(self._pump_generation.get(a,0)==g for a,g in generations.items()))
         def guarded_action():
             if not current(): return _CANCELLED
-            guard = controller.cancellable(current) if stop_ticket is None and hasattr(controller, 'cancellable') else nullcontext()
-            with guard:
-                return action()
+            # A stop preempts an active transaction on any pump. Unrelated
+            # queued work takes the new epoch when it starts after the stop.
+            epoch=self._packet_epoch
+            packet_current=lambda:current() and (stop_operation or self._packet_epoch==epoch)
+            guard = controller.cancellable(packet_current) if stop_ticket is None and hasattr(controller, 'cancellable') else nullcontext()
+            try:
+                with guard:return action()
+            except CommandCancelled:return _CANCELLED
         worker=FunctionWorker(guarded_action)
-        for panel in target_panels:
+        # Read-only polling keeps cancellation guards without disabling forms.
+        locked_panels=target_panels if lock_panels else []
+        for panel in locked_panels:
             self._panel_pending[panel.address]=self._panel_pending.get(panel.address,0)+1;panel.set_busy(True)
         self.pending_tasks+=1;self._active_workers.add(worker)
         def handle_result(result):
@@ -747,7 +754,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             if current():self.on_task_error(target_panels,message)
             else:self.append_log(f'Earlier operation failed after STOP ALL request: {message}')
         def handle_finished():
-            try:self.on_task_finished(worker,target_panels,stop_ticket)
+            try:self.on_task_finished(worker,locked_panels,stop_ticket)
             finally:self._active_callbacks.discard(callbacks)
         callbacks=WorkerCallbacks(self,handle_result,handle_error,handle_finished)
         self._active_callbacks.add(callbacks)

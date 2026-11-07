@@ -48,6 +48,7 @@ MANUAL_STATION_TEXT = [
 ('Device settings changed or verification failed.', '設備設定已改變或回讀驗證失敗。'),
 ('Wait for the device response.', '請等候設備回應。'),
 ('Write result', '寫入結果'),
+('Write interrupted by STOP; write and verify again.', '停止要求已中斷寫入，請重新寫入並回讀。'),
 ('Check pump {raw0}.', '請現場檢查幫浦 {raw0}。'),
 ('Enter a positive priming rate.', '請輸入大於零的預充流速。'),
 ('Enter a positive priming volume.', '請輸入大於零的預充體積。'),

@@ -356,6 +356,34 @@ class ManualStationTests(unittest.TestCase):
         self.assertTrue(p.stop_button.isEnabled());self.assertTrue(p.editor_stop_button.isEnabled())
         p.stop_button.click();self.idle();self.assertEqual(p.last_status,'P')
 
+    def test_background_status_poll_preserves_other_pump_editing_and_can_queue_its_write(self):
+        self.ready((0,1));w=self.win;self.write(0);w.run_single(0);self.idle()
+        with patch('ui.main_window.FunctionWorker',FakeWorker),patch('ui.main_window.WorkerCallbacks',FakeCallbacks):
+            w.thread_pool=FakePool();w.refresh_status()
+            self.assertFalse(w.panels[1].busy);self.assertTrue(w.panels[1].rate_input.isEnabled())
+            w.panels[1].rate_input.setValue(2);w.apply_single(1,w.panels[1].current_settings())
+            while w.thread_pool.queue:w.thread_pool.run_next()
+        self.assertTrue(w.panels[0].running);self.assertTrue(w.panels[1].settings_applied)
+        self.assertEqual(w.pending_tasks,0)
+
+    def test_single_stop_preempts_other_pump_active_configuration_between_packets(self):
+        self.ready((0,1));w=self.win;self.write(0);w.run_single(0);self.idle()
+        original=w.controller.send_command;commands=[];interrupted=False
+        def send(a,c):
+            nonlocal interrupted
+            response=original(a,c);commands.append((a,c))
+            if a==1 and c=='PHN 1' and not interrupted:
+                interrupted=True;w.stop_single(0)
+            return response
+        with patch.object(w.controller,'send_command',side_effect=send),patch('ui.main_window.FunctionWorker',FakeWorker),patch('ui.main_window.WorkerCallbacks',FakeCallbacks):
+            w.thread_pool=FakePool();w.apply_single(1,w.panels[1].current_settings())
+            while w.thread_pool.queue:w.thread_pool.run_next()
+        boundary=commands.index((1,'PHN 1'))
+        self.assertTrue(all(a==0 and c in ('','STP','PHN') for a,c in commands[boundary+1:]))
+        self.assertEqual(w.panels[0].last_status,'P')
+        self.assertFalse(w.panels[1].settings_applied);self.assertTrue(w.panels[1].online)
+        self.assertIn('Write interrupted by STOP',w.panels[1].last_response_source)
+
     def test_inline_syringe_drawer_stays_on_console_and_shares_model(self):
         self.ready();w=self.win;w.show_workflow_step(3);w.open_station_setup(0)
         drawer=w.panels[0].inline_setup
