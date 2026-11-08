@@ -260,6 +260,12 @@ class DeviceStateAuditTests(unittest.TestCase):
         with patch.object(w, 'show_nonmodal_warning') as notice:
             w.process_results([(0, 'STATUS', alarm)])
             self.assertEqual(notice.call_count, 1)
+        w.process_results([(0, 'STATUS', parse_response(b'\x0200S\x03', 0))])
+        self.write(0)
+        with patch.object(w, 'show_nonmodal_warning') as notice, patch.object(w.controller, 'scan', return_value={0:alarm}):
+            w.scan_pumps(); self.idle()
+            self.assertEqual(notice.call_count, 1)
+        self.assertNotIn(0, w.station_proofs)
 
 
 if __name__ == '__main__':unittest.main()

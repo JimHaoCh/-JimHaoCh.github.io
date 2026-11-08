@@ -706,16 +706,20 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             if panel is not None:
                 panel.update_from_status(response.status)
                 panel.set_last_response(self.describe_response(response))
-                if response.status == 'A':
-                    self.invalidate_program_confirmation(address)
-                    key = (address, response.alarm_code)
-                    if key not in self._alarm_notices:
-                        self._alarm_notices.add(key)
-                        self.show_nonmodal_warning('Pump alarm',
-                            f'Pump {panel.index}: {response.alarm_label or response.data}. Check the device, stop, then write and verify again.')
             self.log_response(address, command, response)
 
     def log_response(self, address: int, command: str, response: PumpResponse) -> None:
+        # Scanning and standalone diameter verification also pass here. Keep
+        # their alarm notices as persistent as alarms seen during polling.
+        panel = self.panels.get(address)
+        if panel is not None and response.status == 'A':
+            panel.invalidate_diameter('Alarm — check pump, stop and refresh status')
+            self.invalidate_program_confirmation(address)
+            key = (address, response.alarm_code)
+            if key not in self._alarm_notices:
+                self._alarm_notices.add(key)
+                self.show_nonmodal_warning('Pump alarm',
+                    f'Pump {panel.index}: {response.alarm_label or response.data}. Check the device, stop, then write and verify again.')
         self.record_command(address, command, response=response)
         message = f"TX {address:02d} {command} | RX {self.describe_response(response)}"
         self.append_log(message)
