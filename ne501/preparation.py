@@ -6,13 +6,13 @@ Device acknowledgements are kept by the current connection, not the plan file.
 from dataclasses import dataclass, replace
 from typing import Callable
 
-from .syringe import format_diameter
+from .syringe import DEFAULT_DIAMETER_MM, format_diameter
 
 
 @dataclass(frozen=True)
 class PumpPlan:
     used: bool = False
-    diameter: float | None = None
+    diameter: float | None = DEFAULT_DIAMETER_MM
     fluid: str = ''
     inlet: str = ''
 

@@ -1,6 +1,7 @@
 """Shared, task-oriented preparation pages for manual and timeline operation."""
 from PySide6.QtCore import Qt, QSignalBlocker
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen, QValidator
+import math
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
     QStackedWidget, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -33,6 +34,26 @@ class DiameterInput(SpinBox):
 
     def textFromValue(self, value):
         return '' if value == 0 else super().textFromValue(value)
+
+    def valueFromText(self, text):
+        return 0.0 if not text.strip() else super().valueFromText(text)
+
+    def validate(self, text, position):
+        if not text.strip():
+            return QValidator.State.Acceptable, text, position
+        return super().validate(text, position)
+
+    def stepBy(self, steps):
+        # Step through representable diameters: 0.100–9.999 by 0.001,
+        # then 10.00–50.00 by 0.01. Index 0 is the explicitly empty value.
+        if not steps:
+            return
+        value = self.valueFromText(self.text())
+        index = 0 if value < .1 else (value - .1) * 1000 + 1 if value < 10 else 9901 + (value - 10) * 100
+        index = math.floor(index + 1e-7) + steps if steps > 0 else math.ceil(index - 1e-7) + steps
+        index = max(0, min(13901, index))
+        value = 0 if index == 0 else (index + 99) / 1000 if index <= 9900 else (index - 8901) / 100
+        self.setValue(value)
 
     def _refresh_placeholder(self):
         self.lineEdit().setPlaceholderText('' if self.hasFocus() else tr('Enter diameter'))
@@ -190,6 +211,7 @@ class Workflow(QWidget):
         self.mapping_note.setWordWrap(True)
         layout.addWidget(self.mapping_note)
         demo = Button('Load example workflow')
+        demo.setToolTip('Load example blocks for selected pumps; retain syringe diameters and path names, then review step 2.')
         demo.clicked.connect(self.owner.load_example_workflow)
         layout.addWidget(demo)
         layout.addStretch()
@@ -197,7 +219,7 @@ class Workflow(QWidget):
 
     def build_syringes(self):
         view, layout = page('Syringe inside diameter d (mm)',
-                            'Use the actual syringe model data or a known inside diameter. Capacity in mL is a separate quantity.')
+                            'New plans start at 10 mm. Use the actual inside diameter; capacity in mL is a separate quantity.')
         self.syringe_count = Label()
         self.syringe_count.setObjectName('nextStepBanner')
         self.syringe_count.hide()
@@ -234,6 +256,7 @@ class Workflow(QWidget):
             verify.clicked.connect(lambda checked=False, a=address: self.owner.write_plan_diameter(a))
             box.addWidget(verify)
             spin.editingFinished.connect(lambda a=address, w=spin: self.owner.commit_diameter(a, w))
+            spin.valueChanged.connect(lambda _, a=address, w=spin: self.owner.diameter_value_changed(a, w))
             spin.lineEdit().textEdited.connect(lambda text, a=address: self.owner.diameter_text_pending(a))
             self.diameter_cards[address] = (widget, identity)
             self.diameter_inputs[address] = spin
@@ -379,8 +402,8 @@ class Workflow(QWidget):
                 for line, text in ((fluid, plan.fluid), (inlet, plan.inlet)):
                     if not line.hasFocus():
                         line.setText(text)
-                    line.setEnabled(not panel.running and not panel.busy)
-                check.setEnabled(not panel.running and not panel.busy)
+                    line.setEnabled(not panel.running and not panel.busy and not panel.stop_pending)
+                check.setEnabled(not panel.running and not panel.busy and not panel.stop_pending)
                 widget, identity = self.diameter_cards[address]
                 widget.setVisible(plan.used)
                 identity.setText(self.identity(address))
@@ -390,7 +413,7 @@ class Workflow(QWidget):
                     blocker = QSignalBlocker(spin)
                     spin.setValue(plan.diameter or 0)
                     del blocker
-                spin.setEnabled(not panel.running and not panel.busy)
+                spin.setEnabled(not panel.running and not panel.busy and not panel.stop_pending)
                 status = self.diameter_status[address]
                 if address in owner._diameter_pending:
                     status.setText('Finish entering a valid inside diameter.')

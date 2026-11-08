@@ -162,6 +162,9 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             self.timeline_editor.project_loaded.connect(self.reset_experiment_confirmation)
             self.timeline_editor.state_changed.connect(self.refresh_group_controls)
             self.timeline_editor.setup_requested.connect(lambda: self.show_workflow_step(1))
+            self.timeline_editor.example_requested.connect(self.load_example_workflow)
+            self.timeline_editor.preparation_requested.connect(self.show_timeline_preparation)
+            self.timeline_editor.show_notice('New workflow: choose pumps, review the 10 mm defaults in step 2, then add blocks.')
         self.auto_refresh_checkbox.setChecked(False)
         self.refresh_button.clicked.connect(self.refresh_ports);self.connect_button.clicked.connect(self.toggle_connection)
         self.scan_button.clicked.connect(self.scan_pumps);self.refresh_status_button.clicked.connect(self.refresh_status)
@@ -176,6 +179,8 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         self.select_pump(self.addresses[0]);self.refresh_ports();self.refresh_group_controls();self.retranslate()
         self.append_log(f'Log file: {self.csv_logger.path}')
         self.append_log('Close WinPumpTerm before connecting to the COM port.')
+        if self.csv_logger.initialization_error is not None:
+            self.report_log_failure(self.csv_logger.initialization_error)
 
     def change_language(self,*_):
         language=str(self.language_combo.currentData());self.settings.setValue('language',language);manager.set_language(language)
@@ -193,6 +198,10 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
                 self.workflow.show_step(3)
             self.refresh_group_controls()
         QTimer.singleShot(0,self.update_dashboard_density)
+
+    def show_timeline_preparation(self, step):
+        self.mode_tabs.setCurrentIndex(1)
+        self.show_workflow_step(step)
 
     def resizeEvent(self,event):
         super().resizeEvent(event)
@@ -701,12 +710,15 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         try:
             self.csv_logger.write(address, command, response=response, error=error)
         except OSError as exc:
-            self.append_log(f'Command log unavailable: {exc}')
-            if not getattr(self, '_log_failure_reported', False):
-                self._log_failure_reported = True
-                self.show_nonmodal_warning('Command log unavailable', 'Device responses remain visible. Check the log folder and free disk space.')
+            self.report_log_failure(exc)
         else:
             self._log_failure_reported = False
+
+    def report_log_failure(self, error):
+        self.append_log(f'Command log unavailable: {error}')
+        if not getattr(self, '_log_failure_reported', False):
+            self._log_failure_reported = True
+            self.show_nonmodal_warning('Command log unavailable', 'Device responses remain visible. Check the log folder and free disk space.')
 
     def describe_response(self, response: PumpResponse) -> str:
         parts = [response.status_label]

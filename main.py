@@ -94,14 +94,23 @@ def run_smoke_test(report_path: Path) -> int:
     if window.timeline_editor is None or len(window.timeline_editor.model.addresses) != 4:
         raise RuntimeError("Four-track timeline preview is missing")
     timeline = window.timeline_editor
-    if timeline.model.diameters != [None] * 4 or window.preparation.used_addresses():
-        raise RuntimeError('A new experiment must start with blank syringe plans')
+    if timeline.model.diameters != [10.0] * 4 or window.preparation.used_addresses():
+        raise RuntimeError('A new experiment must start with 10 mm defaults and no selected pumps')
+    if any(p.confirmed_diameter is not None for p in window.panels.values()):
+        raise RuntimeError('Default values must not count as device confirmations')
+    window.update_preparation(0, used=True, diameter=4.699, fluid='Sample', inlet='A')
+    # Fixture setup is intentional; avoid a save prompt in unattended checks.
+    timeline.saved_snapshot = timeline.model.to_json()
     window.load_example_workflow()
-    window.show_workflow_step(1)
+    if window.workflow.step != 1 or timeline.model.diameters[0] != 4.699 or window.preparation.used_addresses() != [0] or timeline.model.names[0] != 'Sample':
+        raise RuntimeError('Example loading must retain shared setup and review step 2')
     flow_diameter = window.workflow.diameter_inputs[0]
     example_diameter = timeline.model.diameters[0]
-    window.workflow.next_button.setFocus()
-    window.update_preparation(0, diameter=None)
+    flow_diameter.setFocus(); flow_diameter.selectAll()
+    QTest.keyClick(flow_diameter, Qt.Key.Key_Backspace)
+    QTest.keyClick(flow_diameter, Qt.Key.Key_Tab)
+    if flow_diameter.text() or timeline.model.diameters[0] is not None:
+        raise RuntimeError('Deleting a diameter must keep the plan empty after Tab')
     QTest.mouseClick(flow_diameter, Qt.MouseButton.LeftButton)
     if flow_diameter.text() or flow_diameter.lineEdit().placeholderText():
         raise RuntimeError('Clicking an empty timeline diameter must clear the visual hint')
@@ -179,6 +188,13 @@ def run_smoke_test(report_path: Path) -> int:
     if diameter.text()!='4.699':raise RuntimeError('Typed diameter was overwritten')
     QTest.mouseClick(window.workflow.diameter_buttons[0],Qt.MouseButton.LeftButton)
     wait_until(lambda: window.pending_tasks == 0 and panel.confirmed_diameter == 4.699, 'typed step-2 diameter verification')
+    diameter.setFocus()
+    QTest.keyClick(diameter, Qt.Key.Key_Up)
+    if window.preparation.plans[0].diameter != 4.7 or panel.confirmed_diameter is not None:
+        raise RuntimeError('Arrow changes must update the plan and invalidate old read-back')
+    QTest.keyClick(diameter, Qt.Key.Key_Down)
+    QTest.mouseClick(window.workflow.diameter_buttons[0], Qt.MouseButton.LeftButton)
+    wait_until(lambda: window.pending_tasks == 0 and panel.confirmed_diameter == 4.699, 'arrow-edited diameter verification')
     window.show_workflow_step(3)
     if hasattr(panel,'inline_setup') or not panel.diameter_input.isReadOnly():
         raise RuntimeError('The manual console must have one read-only syringe summary')
@@ -265,6 +281,11 @@ def run_smoke_test(report_path: Path) -> int:
         "mouse_diameter_manual": True,
         "mouse_diameter_timeline": True,
         "no_preparation_confirmation_gates": True,
+        "default_diameter_10_mm": True,
+        "example_setup_retained": True,
+        "example_reviews_step_two": True,
+        "cleared_diameter_persists": True,
+        "arrow_diameter_committed": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")

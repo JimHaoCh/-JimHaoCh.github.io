@@ -1,5 +1,10 @@
 """Traditional Chinese / English copy for the shared preparation workflow."""
 WORKFLOW_TEXT = [
+('Next: review the syringe diameters in step 2.', '下一步：到步驟 2 檢視針筒內徑。'),
+('Example blocks loaded. Review the retained syringe diameters in step 2.', '已載入範例區塊並保留原有設定；請到步驟 2 檢視針筒內徑。'),
+('New workflow: choose pumps, review the 10 mm defaults in step 2, then add blocks.', '新流程：選擇幫浦，到步驟 2 檢視預設 10 mm 內徑，再新增區塊。'),
+('Load example blocks for selected pumps; retain syringe diameters and path names, then review step 2.', '為所選幫浦載入範例區塊，保留內徑與流路名稱，再到步驟 2 檢視。'),
+('New plans start at 10 mm. Use the actual inside diameter; capacity in mL is a separate quantity.', '新規劃預設 10 mm，請依實際針筒內徑調整；容量 mL 為另一個數值。'),
 ('● Demo mode', '● 示範模式'),
 ('Demo pumps running: {raw0}', '示範運轉：{raw0}'),
 ('Stop unconfirmed: {raw0}', '停止未確認：{raw0}'),

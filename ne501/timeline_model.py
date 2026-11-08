@@ -9,7 +9,7 @@ import json
 import math
 from typing import Any
 from uuid import uuid4
-from .syringe import format_diameter, plunger_speed_mm_min, MIN_LINEAR_SPEED_MM_MIN, MAX_LINEAR_SPEED_MM_MIN
+from .syringe import DEFAULT_DIAMETER_MM, format_diameter, plunger_speed_mm_min, MIN_LINEAR_SPEED_MM_MIN, MAX_LINEAR_SPEED_MM_MIN
 from .pump_numbers import normalize_rate
 from .preparation import PumpPlan
 
@@ -70,7 +70,7 @@ class Timeline:
         self.total = total
         self.clips = list(clips or [])
         self.addresses = list(addresses if addresses is not None else [0, 1, 2, 3])
-        self.diameters = list(diameters if diameters is not None else [None] * 4)
+        self.diameters = list(diameters if diameters is not None else [DEFAULT_DIAMETER_MM] * 4)
         self.used = list(used if used is not None else [any(c.pump == p for c in self.clips) for p in range(4)])
         self.names = list(names if names is not None else [''] * 4)
         self.inlets = list(inlets if inlets is not None else [''] * 4)
@@ -261,4 +261,4 @@ def example_timeline(addresses: list[int] | None = None) -> Timeline:
                            Clip('c', 1, 100, 750, 'INF', 6, 'µL/min'),
                            Clip('d', 2, 200, 450, 'INF', 4, 'µL/min'),
                            Clip('e', 2, 650, 1200, 'INF', 8, 'µL/min'),
-                           Clip('f', 3, 850, 1200, 'WDR', 2, 'µL/min')], addresses, [10.0] * 4)
+                           Clip('f', 3, 850, 1200, 'WDR', 2, 'µL/min')], addresses, [DEFAULT_DIAMETER_MM] * 4)

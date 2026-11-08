@@ -41,6 +41,8 @@ class TimelineEditor(QWidget):
     project_loaded = Signal()
     state_changed = Signal()
     setup_requested = Signal()
+    example_requested = Signal()
+    preparation_requested = Signal(int)
     def __init__(self, addresses: list[int] | None = None, parent=None):
         super().__init__(parent)
         self.external_setup = False
@@ -215,6 +217,7 @@ class TimelineEditor(QWidget):
         self.duration_apply = QPushButton('套用總長'); self.duration_cancel = QPushButton('取消')
         row.addWidget(self.duration_apply); row.addWidget(self.duration_cancel); side.addLayout(row)
         self.demo_button = QPushButton('載入範例'); side.addWidget(self.demo_button)
+        self.demo_button.setToolTip('Load example blocks for selected pumps; retain syringe diameters and path names, then review step 2.')
         note = QLabel('預估體積依設定計算。實際針筒、管路與裝置時序需驗證。')
         note.setObjectName('secondaryLabel'); note.setWordWrap(True); side.addWidget(note)
         side.addStretch()
@@ -238,7 +241,7 @@ class TimelineEditor(QWidget):
         self.open_button.clicked.connect(self.open_file)
         self.save_button.clicked.connect(lambda: self.save_file())
         self.save_as_button.clicked.connect(lambda: self.save_file(save_as=True))
-        self.demo_button.clicked.connect(self.load_demo)
+        self.demo_button.clicked.connect(self.request_demo)
         self.inspector_button.toggled.connect(self.inspector_scroll.setVisible)
         self.add_button.clicked.connect(self.add_clip)
         self.undo_button.clicked.connect(self.undo); self.redo_button.clicked.connect(self.redo)
@@ -682,6 +685,10 @@ class TimelineEditor(QWidget):
 
     def save_file(self, save_as=False):
         self.canvas.cancel_drag()
+        if not self.plan_ready():
+            self.show_notice('Finish entering a valid inside diameter.')
+            self.setup_requested.emit()
+            return False
         if self.busy() or self.pending():
             self.show_notice('請先停止播放，並套用或取消欄位修改後儲存。'); return False
         path = self.current_path
@@ -704,6 +711,7 @@ class TimelineEditor(QWidget):
         self.show_notice(f'已儲存：{path.name}'); self.update_controls(); return True
 
     def _load_model(self, model, path=None):
+        self.dirty = self.duration_dirty = False
         self.model = model; self.current_path = path; self.saved_snapshot = model.to_json()
         self.history.clear(); self.future.clear(); self.checked = False
         self.canvas.model = model; self.canvas.selected = model.clips[0].id if model.clips else None
@@ -722,7 +730,7 @@ class TimelineEditor(QWidget):
         return model
 
     def open_file(self):
-        if self.busy(): return
+        if not self.project_change_allowed(): return
         self.canvas.cancel_drag()
         chosen, _ = QFileDialog.getOpenFileName(self, '開啟流程', str(self.current_path.parent) if self.current_path else '', 'JSON (*.json)')
         if not chosen: return
@@ -738,15 +746,43 @@ class TimelineEditor(QWidget):
         except (OSError,ValueError,UnicodeError) as exc:
             QMessageBox.warning(self,'開啟失敗',str(exc));return
         self._load_model(model, path); self.show_notice(f'已開啟：{path.name}')
+        if self.external_setup:
+            self.preparation_requested.emit(1)
 
     def new_file(self):
-        if self.busy() or not self.prepare_to_leave(): return
+        if not self.project_change_allowed() or not self.prepare_to_leave(): return
         self._load_model(Timeline(1200, addresses=list(self.config_addresses)))
-        self.show_notice('新流程：先選擇幫浦，再新增區塊。')
+        self.show_notice('New workflow: choose pumps, review the 10 mm defaults in step 2, then add blocks.')
+        if self.external_setup:
+            self.preparation_requested.emit(0)
+
+    def request_demo(self):
+        if self.external_setup:
+            self.example_requested.emit()
+        else:
+            self.load_demo()
+
+    def project_change_allowed(self):
+        if not self.operation_allowed() or self.busy():
+            return False
+        if not self.plan_ready():
+            self.show_notice('Finish entering a valid inside diameter.')
+            self.setup_requested.emit()
+            return False
+        return True
 
     def load_demo(self):
-        if self.busy() or not self.prepare_to_leave(): return False
-        self._load_model(example_timeline(list(self.config_addresses))); self.show_notice('Example loaded with 10 mm sample diameters.')
+        if not self.project_change_allowed() or not self.prepare_to_leave(): return False
+        model = example_timeline(list(self.config_addresses))
+        if self.external_setup:
+            # Templates supply blocks; shared pump selection and syringe data
+            # continue to describe the user's current experiment.
+            used = self.model.used if any(self.model.used) else [True] * 4
+            model = Timeline(model.total, [c for c in model.clips if used[c.pump]],
+                             model.addresses, self.model.diameters, used,
+                             self.model.names, self.model.inlets)
+        self._load_model(model)
+        self.show_notice('Example blocks loaded. Review the retained syringe diameters in step 2.' if self.external_setup else 'Example loaded with 10 mm sample diameters.')
         return True
 
     def update_transport(self):
@@ -784,8 +820,8 @@ class TimelineEditor(QWidget):
         self.home_button.setEnabled(not pending and (busy or self.playhead > 0))
         self.speed_combo.setEnabled(not busy)
         self.position_spin.setEnabled(not self.running and not pending)
-        for b in (self.new_button, self.open_button, self.demo_button): b.setEnabled(not busy)
-        for b in (self.save_button, self.save_as_button): b.setEnabled(not busy and not pending)
+        for b in (self.new_button, self.open_button, self.demo_button): b.setEnabled(self.operation_allowed() and self.plan_ready() and not busy)
+        for b in (self.save_button, self.save_as_button): b.setEnabled(self.plan_ready() and not busy and not pending)
         for b in (self.add_button, self.pump_combo): b.setEnabled(not busy and not pending)
         self.undo_button.setEnabled(not busy and not pending and bool(self.history))
         self.redo_button.setEnabled(not busy and not pending and bool(self.future))

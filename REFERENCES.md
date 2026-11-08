@@ -22,8 +22,8 @@ license and source locations. Each third-party project retains its rights.
 ## Suggested software citation / 建議軟體引用
 
 NE-501 Multi Pump Controller contributors. (2026). *NE-501 Multi Pump Controller*
-(version 1.5.2) [Computer software].
-https://github.com/JimHaoCh/-JimHaoCh.github.io/tree/ne501-v1.5.2
+(version 1.5.3) [Computer software].
+https://github.com/JimHaoCh/-JimHaoCh.github.io/tree/ne501-v1.5.3
 
 The project was developed for the NE-501 research workflow with AI assistance.
 New Era Pump Systems does not sponsor, certify or endorse this software.

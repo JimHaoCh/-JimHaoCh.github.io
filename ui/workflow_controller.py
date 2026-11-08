@@ -1,6 +1,7 @@
 """UI coordination for shared preparation; all motor commands stay explicit."""
 from dataclasses import replace
 import math
+from PySide6.QtCore import QSignalBlocker
 
 from ne501.preparation import PumpPlan, write_verified_program
 from ne501.controller import ProgramSettings
@@ -82,6 +83,8 @@ class WorkflowController:
         for address in used:
             if self.preparation.plans[address].diameter is None or address in self._diameter_pending:
                 return f'P{self.addresses.index(address) + 1}: enter the syringe inside diameter.', 1
+        if self.workflow.step == 0:
+            return 'Next: review the syringe diameters in step 2.', 1
         if manual:
             if self.workflow.step==3:
                 return 'Use the pump cards to start, resume or stop. Write changed settings before starting.',3
@@ -140,7 +143,7 @@ class WorkflowController:
         if self._syncing_preparation:
             return False
         panel = self.panels[address]
-        if panel.running or panel.busy:
+        if panel.running or panel.busy or panel.stop_pending:
             self.workflow.next_hint.setText('Stop this pump before changing preparation.')
             self.workflow.refresh()
             return False
@@ -186,6 +189,10 @@ class WorkflowController:
                 if self.preparation.plans[address] != old:
                     self._diameter_pending.discard(address)
                     self._prep_verified.pop(address, None)
+                    spin = self.workflow.diameter_inputs[address]
+                    blocker = QSignalBlocker(spin)
+                    spin.setValue(model.diameters[i] or 0)
+                    del blocker
         finally:
             self._syncing_preparation = False
         self.refresh_group_controls()
@@ -194,6 +201,10 @@ class WorkflowController:
         self._diameter_pending.add(address)
         self.panels[address].mark_settings_dirty()
         self.refresh_group_controls()
+
+    def diameter_value_changed(self, address, spin):
+        if not self.workflow.updating and not self._syncing_preparation:
+            self.commit_diameter(address, spin)
 
     def diameter_input_valid(self, address):
         spin = self.workflow.diameter_inputs[address]
@@ -275,13 +286,18 @@ class WorkflowController:
         self.refresh_group_controls()
 
     def load_example_workflow(self):
-        if self.pending_tasks or any(p.running for p in self.panels.values()):
-            self.workflow.next_hint.setText('Stop this pump before changing preparation.')
+        if not self.can_use_timeline():
+            self.workflow.next_hint.setText('Stop the pumps and wait for pending commands before using the timeline.')
             return
+        for address in list(self._diameter_pending):
+            self.commit_diameter(address, self.workflow.diameter_inputs[address])
+            if address in self._diameter_pending:
+                self.open_station_setup(address)
+                return
         if self.timeline_editor:
             if self.timeline_editor.load_demo():
                 self.mode_tabs.setCurrentIndex(1)
-                self.show_workflow_step(3)
+                self.show_workflow_step(1)
 
     def reset_experiment_confirmation(self):
         self.preparation.reset_session()

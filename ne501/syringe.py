@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import math
 
+DEFAULT_DIAMETER_MM = 10.0
+
 MAX_LINEAR_SPEED_MM_MIN = 51.00464828
 MIN_LINEAR_SPEED_MM_MIN = 0.004204478 * 10 / 60
 FLOW_UL_MIN = {'µL/min': 1, 'mL/min': 1000, 'µL/hr': 1 / 60, 'mL/hr': 1000 / 60,

@@ -296,7 +296,7 @@ class ModeWorkflowTests(unittest.TestCase):
                                Clip('main', 0, 60, 600, 'INF', 10, 'µL/min')], diameters=[10, None, None, None])
         self.win.timeline_editor._load_model(model)
         self.win.mode_tabs.setCurrentIndex(1)
-        self.assertEqual(self.win.workflow_hint()[1], 3)
+        self.assertEqual(self.win.workflow_hint()[1], 1)
         self.assertTrue(self.win.workflow.steps[0].property('complete'))
         self.win.show_workflow_step(4)
         view = self.win.workflow

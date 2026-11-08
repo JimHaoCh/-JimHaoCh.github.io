@@ -161,16 +161,16 @@ class WorkflowUITests(unittest.TestCase):
             self.win.preparation.confirm_tubing(address, 'done')
         self.win.refresh_group_controls()
 
-    def test_new_install_has_blank_syringes_and_explicit_example_entry(self):
+    def test_new_install_has_ten_mm_defaults_and_example_reviews_syringes(self):
         self.assertEqual(self.win.workflow.step, 0)
         self.assertEqual(self.win.preparation.used_addresses(), [])
-        self.assertEqual(self.win.timeline_editor.model.diameters, [None] * 4)
+        self.assertEqual(self.win.timeline_editor.model.diameters, [10] * 4)
         self.assertEqual(self.win.timeline_editor.model.clips, [])
-        self.assertTrue(all(spin.value() == 0 for spin in self.win.workflow.diameter_inputs.values()))
+        self.assertTrue(all(spin.value() == 10 for spin in self.win.workflow.diameter_inputs.values()))
         self.win.load_example_workflow()
         self.assertEqual(self.win.timeline_editor.model.diameters, [10] * 4)
         self.assertFalse(self.win.preparation.mapping_confirmed)
-        self.assertEqual(self.win.workflow.step, 3)
+        self.assertEqual(self.win.workflow.step, 1)
 
     def test_next_step_orders_real_setup_and_routes_device_failures(self):
         self.win.update_preparation(0, used=True)
@@ -179,8 +179,11 @@ class WorkflowUITests(unittest.TestCase):
         self.win.update_preparation(0, diameter=None)
         self.assertEqual(self.win.workflow_hint()[1], 1)
         self.win.update_preparation(0, diameter=4.699)
-        self.assertEqual(self.win.workflow_hint()[1], 3)
+        self.assertEqual(self.win.workflow_hint()[1], 1)
         self.assertEqual(self.win.preparation.tubing[0], 'pending')
+        self.win.follow_workflow_hint()
+        self.assertEqual(self.win.workflow.step, 1)
+        self.assertEqual(self.win.workflow_hint()[1], 3)
         self.win.follow_workflow_hint()
         self.assertEqual(self.win.workflow.step, 3)
         self.win.panels[0].set_online(False)

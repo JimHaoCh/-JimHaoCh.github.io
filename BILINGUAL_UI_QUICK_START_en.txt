@@ -1,9 +1,11 @@
-NE-501 v1.5.2 quick start
+NE-501 v1.5.3 quick start
 
 Manual Control: Connect & map > Syringes > Manual console.
 Timeline Editor: Pumps & paths > Syringes > Timeline editor > Check & preview.
 
-Choose the pumps in step 1, then enter the actual syringe inside diameter in mm in step 2. No extra mapping checkbox or tubing-status dropdown is required. Click an empty diameter field and type; the visual hint disappears on focus and is never part of the numeric text. This applies to both modes. Set formal rate, units, direction and continuous or target-volume mode. Write & verify, then start on the pump card or fixed editor footer. Four cards retain Start/Resume and Stop while the editor scrolls. Editing a pump leaves the independently selected group unchanged. The console has a read-only diameter summary with a link back to step 2. Typing, paste, Enter/Tab and clicking Write & verify are supported.
+Choose the pumps in step 1, then review the actual syringe inside diameter in mm in step 2. All new syringe plans start at 10 mm; defaults are not device confirmations. Delete to leave a value empty, type a replacement, or use the arrows. Arrow changes immediately update the shared plan and invalidate old device proof. No extra mapping checkbox or tubing-status dropdown is required. Click an empty diameter field and type; the visual hint disappears on focus and is never part of the numeric text. This applies to both modes. Set formal rate, units, direction and continuous or target-volume mode. Write & verify, then start on the pump card or fixed editor footer. Four cards retain Start/Resume and Stop while the editor scrolls. Editing a pump leaves the independently selected group unchanged. The console has a read-only diameter summary with a link back to step 2. Typing, paste, Enter/Tab and clicking Write & verify are supported.
+
+Example loading keeps selected pumps, diameters, fluids and inlet names and adds only their example blocks, then returns to step 2. With no pumps selected, the example selects all four. New projects return to pump selection. Opened files retain their saved diameters, including null values, and return to step 2. Invalid diameter drafts block saving or replacing the project.
 
 Use the single Priming/purge tool for optional preparation. Choose one of five speeds or a custom rate, direction and finite volume. Write & verify, then explicitly start priming. Continue with formal delivery after priming defaults off and runs only after an explicit priming start. After independent priming stops, formal Start is available without a separate tubing confirmation. Formal start enters formal delivery directly. Resume retains native progress. Changed priming drafts require a new priming write; unchanged verified formal delivery remains available.
 
@@ -13,6 +15,6 @@ The demo controller models elapsed-time finite delivery, pause/resume and explic
 
 Flow preview sends no pump start commands. Initial preparation belongs in timeline blocks, and all included blocks contribute to totals. Drag, trim, copy, split, snap, undo/redo, unit conversion and JSON files remain available. Device read-backs are session data.
 
-See BILINGUAL_MANUAL_UI_v1.5.2.md and UI_REVIEW_v1.5.2.md. Windows x64 and Windows 11 ARM64 share the installer. Automated device tests use simulated I/O; actual delivery, tubing behavior, stop latency and synchronization require hardware measurements.
+See BILINGUAL_MANUAL_UI_v1.5.3.md and UI_REVIEW_v1.5.3.md. Windows x64 and Windows 11 ARM64 share the installer. Automated device tests use simulated I/O; actual delivery, tubing behavior, stop latency and synchronization require hardware measurements.
 
-Stop queries that time out still lead to a STOP attempt. Unconfirmed stops survive repeated communication failures, rescans and disconnects. Log I/O failures preserve device-state updates. Priming and pause labels survive timed refreshes. Completed group writes retain individual confirmations when another pump is stopped.
+Stop queries that time out still lead to a STOP attempt. Unconfirmed stops survive repeated communication failures, rescans and disconnects. Log creation and write failures preserve startup and device-state updates. Unconfirmed stops also lock preparation fields and project replacement. Priming and pause labels survive timed refreshes. Completed group writes retain individual confirmations when another pump is stopped.
