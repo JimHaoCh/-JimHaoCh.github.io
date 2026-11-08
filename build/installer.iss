@@ -1,5 +1,5 @@
 #define MyAppName "NE-501 Timeline UI Preview"
-#define MyAppVersion "1.5.1"
+#define MyAppVersion "1.5.2"
 #define MyAppExeName "NE501_Multi_Pump_Controller.exe"
 
 [Setup]
@@ -13,7 +13,7 @@ ArchitecturesAllowed=x64os or arm64
 ArchitecturesInstallIn64BitMode=x64os or arm64
 MinVersion=10.0.17763
 OutputDir=..\release
-OutputBaseFilename=NE501_UI_v1.5.1_Setup
+OutputBaseFilename=NE501_UI_v1.5.2_Setup
 SetupIconFile=..\assets\ne501.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
@@ -29,9 +29,9 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "..\BILINGUAL_UI_QUICK_START_en.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\BILINGUAL_MANUAL_UI_v1.5.1.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\BILINGUAL_MANUAL_UI_v1.5.2.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\UI_REVIEW_2026-11-06.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\UI_REVIEW_v1.5.1.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\UI_REVIEW_v1.5.2.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\assets\fonts\OFL.txt"; DestDir: "{app}\docs\NotoSansCJK"; Flags: ignoreversion
 Source: "..\assets\fonts\FONT_NOTICE.txt"; DestDir: "{app}\docs\NotoSansCJK"; Flags: ignoreversion
 Source: "..\builds\arm64\NE501_Multi_Pump_Controller\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: PreferArm64Files

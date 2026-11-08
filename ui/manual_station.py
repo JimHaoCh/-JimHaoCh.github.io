@@ -119,23 +119,8 @@ class SetupSummary(QWidget):
         super().__init__(); self.owner, self.panel = owner, panel
         box = QVBoxLayout(self); box.setContentsMargins(0, 0, 0, 4)
         box.addWidget(panel.diameter_status)
-        panel.change_diameter_button.setText('Edit syringe & tubing in step 2')
+        panel.change_diameter_button.setText('Edit syringe diameter in step 2')
         box.addWidget(panel.change_diameter_button)
-        self.tubing_status = Label(); self.tubing_status.setWordWrap(True)
-        box.addWidget(self.tubing_status)
-        self.confirm_ready = Button('Priming checked · tubing ready')
-        self.confirm_ready.clicked.connect(lambda: owner.change_tubing(panel.address, 'done'))
-        box.addWidget(self.confirm_ready)
-
-    def refresh(self):
-        p, owner = self.panel, self.owner
-        choice = owner.preparation.tubing[p.address]
-        text = {'pending':'Choose preparation status', 'needed':'Connected · needs priming',
-                'done':'Tubing checked · ready', 'skipped':'Skip priming · user confirmed'}[choice]
-        self.tubing_status.setText(text)
-        finished = p.station_context in ('priming', 'priming_chain') and p.last_status in ('P', 'S')
-        self.confirm_ready.setVisible(choice == 'needed' and finished)
-        self.confirm_ready.setEnabled(owner.manual_mode() and not p.busy and not p.stop_pending)
 
 
 class ManualStationController:
@@ -176,8 +161,6 @@ class ManualStationController:
         panel=self.panels[address];plan=self.preparation.plans[address]
         if not plan.used:return 'Select this pump for this experiment.'
         if not self.can_write_panel(panel):return panel.configuration_blocker() or 'Wait for the device response.'
-        if not self.preparation.mapping_confirmed:return 'Confirm the pump-to-inlet mapping.'
-        if self.preparation.tubing[address]=='pending':return 'Confirm syringe clamping, tubing and the outlet before priming.'
         snapshot=self.station_prime_snapshot(address)
         if snapshot is None:return panel.priming_control.validation_error or 'Enter a priming rate and finite target volume when needed.'
         proof=self.station_proofs.get(address)
@@ -190,7 +173,7 @@ class ManualStationController:
     def refresh_station(self):
         if not getattr(self,'station_ready',False):return
         for address,panel in self.panels.items():
-            panel.priming_control.refresh();panel.setup_summary.refresh()
+            panel.priming_control.refresh()
             formal_ready=not self.manual_start_blocker(address)
             panel.run_button.setEnabled(formal_ready);panel.editor_run_button.setEnabled(formal_ready)
             phase=panel.station_phase

@@ -1,5 +1,6 @@
 """Copy for the three-stage manual console."""
 MANUAL_STATION_TEXT = [
+('Edit syringe diameter in step 2', '回步驟 2 修改針筒內徑'),
 ('Edit syringe & tubing in step 2', '回步驟 2 修改針筒與管路'),
 ('Priming checked · tubing ready', '已確認排氣／預充完成，管路就緒'),
 ('Command log unavailable', '指令紀錄無法寫入'),

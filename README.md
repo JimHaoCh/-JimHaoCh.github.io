@@ -1,8 +1,8 @@
-# NE-501 Multi Pump Controller — UI Preview v1.5.1
+# NE-501 Multi Pump Controller — UI Preview v1.5.2
 
 Four-pump manual control and a visual timeline editor with global Traditional Chinese / English switching.
 
-v1.5.1 修復數字鍵入與貼上被刷新還原的問題。針筒內徑集中在步驟 2，操作台只顯示摘要及返回修改入口。修正跨通道導引循環、預充／暫停標示、停止查詢逾時、停止未確認提示、紀錄寫入故障、群組部分結果及極小流速輸入驗證。手動操作台保留各台固定啟停與統一預充。
+v1.5.2 依使用者操作回饋簡化準備路徑：步驟 1 選擇幫浦後直接設定內徑，移除額外核對勾選；步驟 2 移除固定／管路確認選單。兩種模式的空白內徑欄位改用視覺提示，滑鼠點入後提示消失並接受數字，無須先選取提示文字。手動操作台保留各台固定啟停、獨立預充及選用的預充接續輸送；設備回讀、錯誤輸入及停止未確認的阻擋仍適用。
 
 **手動控制會操作已連線設備；時間軸提供流程預覽，播放不傳送幫浦啟動指令。** 0.1 秒為編輯刻度，實機四幫浦同步誤差尚未量測。本專案與原廠無隸屬或背書關係，使用前請閱讀 [DISCLAIMER.txt](DISCLAIMER.txt)。
 
@@ -11,9 +11,9 @@ v1.5.1 修復數字鍵入與貼上被刷新還原的問題。針筒內徑集中�
 - [版本下載](https://github.com/JimHaoCh/-JimHaoCh.github.io/releases)
 - [繁體中文快速說明](TIMELINE_PREVIEW_README_zh.txt)
 - [English quick start](BILINGUAL_UI_QUICK_START_en.txt)
-- [雙語與手動介面設計、驗證範圍](BILINGUAL_MANUAL_UI_v1.5.1.md)
+- [雙語與手動介面設計、驗證範圍](BILINGUAL_MANUAL_UI_v1.5.2.md)
 - [時間軌審查紀錄](UI_REVIEW_2026-11-06.md)
-- [v1.5.1 原始碼審查與修正](UI_REVIEW_v1.5.1.md)
+- [v1.5.2 原始碼審查與修正](UI_REVIEW_v1.5.2.md)
 - [參考來源](REFERENCES.md)／[引用資料](CITATION.cff)
 
 Windows x64／Windows 11 ARM64 共用安裝程式，使用者無須另裝 Python。預覽版使用與 v1.0.1 分開的安裝位置與設定；此版更新既有 UI Preview。

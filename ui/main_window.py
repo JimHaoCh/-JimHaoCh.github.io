@@ -319,20 +319,12 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         if address is None:return
         self.select_pump(address)
         panel=self.panels[address]
-        if not self.preparation.plans[address].used or not self.preparation.mapping_confirmed:
+        if not self.preparation.plans[address].used:
             self.show_workflow_step(0)
-            self.workflow.mapping_check.setFocus()
+            self.workflow.mapping_inputs[address][0].setFocus()
             return
         if self.preparation.plans[address].diameter is None or address in self._diameter_pending:
             self.open_station_setup(address)
-            return
-        if self.preparation.tubing[address] not in ('done', 'skipped'):
-            if self.manual_mode() and self.workflow.step==3:
-                if panel.setup_summary.confirm_ready.isVisible():
-                    panel.setup_summary.confirm_ready.setFocus()
-                    return
-            self.show_workflow_step(2)
-            self.workflow.tubing_choices[address][1].setFocus()
             return
         if not panel.online:
             self.show_workflow_step(0)

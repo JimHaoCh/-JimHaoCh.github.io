@@ -24,6 +24,28 @@ class TextInput(QLineEdit):
         self.setPlaceholderText(tr(self.placeholder))
 
 
+class DiameterInput(SpinBox):
+    """Keep the empty-diameter hint outside the editable numeric text."""
+    def __init__(self):
+        super().__init__()
+        manager.changed.connect(self._refresh_placeholder)
+        self._refresh_placeholder()
+
+    def textFromValue(self, value):
+        return '' if value == 0 else super().textFromValue(value)
+
+    def _refresh_placeholder(self):
+        self.lineEdit().setPlaceholderText('' if self.hasFocus() else tr('Enter diameter'))
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self._refresh_placeholder()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self._refresh_placeholder()
+
+
 class DiameterDrawing(QWidget):
     """Exact code-drawn bore cue: d spans the inside of the syringe barrel."""
     def __init__(self):
@@ -87,7 +109,6 @@ class Workflow(QWidget):
         self.diameter_status = {}
         self.diameter_buttons = {}
         self.diameter_cards = {}
-        self.tubing_choices = {}
         self.prep_input_values = {}
         self._prep_selector = ComboBox()
         self._prep_selector.currentIndexChanged.connect(lambda *_: owner.select_pump(self._prep_selector.currentData()) if self._prep_selector.currentData() in owner.panels else None)
@@ -164,10 +185,7 @@ class Workflow(QWidget):
             inlet.editingFinished.connect(lambda a=address, w=inlet: self.owner.update_preparation(a, inlet=w.text().strip()))
             grid.addWidget(widget, i // 2, i % 2)
         layout.addLayout(grid)
-        self.mapping_check = CheckBox('I checked the pump addresses and physical inlet connections.')
-        self.mapping_check.toggled.connect(self.owner.confirm_mapping)
-        layout.addWidget(self.mapping_check)
-        self.mapping_note = Label('User confirmation · connection alone does not confirm the tubing layout.')
+        self.mapping_note = Label('Add any initial priming as timeline blocks. Every included block contributes to the delivery totals.')
         self.mapping_note.setObjectName('secondaryLabel')
         self.mapping_note.setWordWrap(True)
         layout.addWidget(self.mapping_note)
@@ -197,12 +215,11 @@ class Workflow(QWidget):
             box.addWidget(title)
             row = QHBoxLayout()
             row.addWidget(DiameterDrawing())
-            spin = SpinBox()
+            spin = DiameterInput()
             spin.setObjectName('syringeValue')
             spin.setDecimals(3)
             spin.setRange(0, 50)
             spin.setSingleStep(.001)
-            spin.setSpecialValueText(tr('Enter diameter'))
             spin.setAccessibleName(tr('Syringe inside diameter d (mm)'))
             spin.setKeyboardTracking(False)
             row.addWidget(spin, 1)
@@ -227,19 +244,6 @@ class Workflow(QWidget):
         self.empty_syringes = Label('Select the pumps in step 1 to enter their syringe diameters.')
         self.empty_syringes.setWordWrap(True)
         layout.addWidget(self.empty_syringes)
-        self.tubing_box, tubing_layout = card()
-        tubing_layout.addWidget(Label('Syringe clamping, tubing and outlet check'))
-        for address in self.owner.addresses:
-            row = QHBoxLayout(); label = Label(); label.setWordWrap(True)
-            label.setTextFormat(Qt.TextFormat.PlainText)
-            choice = ComboBox()
-            for text, code in (('Choose preparation status','pending'),('Connected · needs priming','needed'),
-                               ('Tubing checked · ready','done'),('Skip priming · user confirmed','skipped')):
-                choice.addItem(text,code)
-            choice.currentIndexChanged.connect(lambda _,a=address,w=choice:self.owner.change_tubing(a,w.currentData()))
-            row.addWidget(label,1);row.addWidget(choice)
-            tubing_layout.addLayout(row);self.tubing_choices[address]=(label,choice)
-        layout.addWidget(self.tubing_box)
         self.copy_button = Button('Use current device read-backs as plan values')
         self.copy_button.clicked.connect(self.owner.adopt_diameter_readbacks)
         layout.addWidget(self.copy_button)
@@ -333,25 +337,23 @@ class Workflow(QWidget):
             for i, text in enumerate(('Manual Control', 'Timeline Editor')):
                 self.mode_selector.setTabText(i, tr(text))
             self.mode_selector.setAccessibleName(tr('Operation mode'))
-            labels = ('1 Connect & map', '2 Syringe & tubing', '', '3 Manual console', '') if manual else ('1 Pumps & paths', '2 Syringes', '', '3 Timeline editor', '4 Check & preview')
+            labels = ('1 Connect & map', '2 Syringes', '', '3 Manual console', '') if manual else ('1 Pumps & paths', '2 Syringes', '', '3 Timeline editor', '4 Check & preview')
             self.steps[2].hide()
             self.steps[4].setVisible(not manual)
-            self.tubing_box.setVisible(manual)
             owner.connection_controls.setVisible(manual)
-            self.mapping_check.setVisible(manual)
+            self.mapping_note.setVisible(not manual)
             mapping = self.stack.widget(0)
             mapping.title_label.setText('Connect pumps and match the fluid paths' if manual else 'Choose pumps and name their fluid paths')
             mapping.note_label.setText('Choose the pumps used in this experiment. Match each address to its physical pump and chip inlet.' if manual else 'Choose the pumps, fluids and inlets for the timeline. Offline editing is available.')
-            self.mapping_note.setText('User confirmation · connection alone does not confirm the tubing layout.' if manual else 'Add any initial priming as timeline blocks. Every included block contributes to the delivery totals.')
             self.syringe_note.setText('Entered = plan value. Read back = confirmed in this connection. Writing settings keeps the motor stopped.' if manual else 'Timeline planning uses the entered diameters. Device writes and priming are available in Manual mode.')
-            self.stack.widget(1).title_label.setText('Syringe & tubing' if manual else 'Syringe inside diameter d (mm)')
+            self.stack.widget(1).title_label.setText('Syringe inside diameter d (mm)')
             self.stack.widget(4).title_label.setText('Review targets and delivery before starting' if manual else 'Review the timeline before preview')
             self.stack.widget(4).note_label.setText('Plan values, user confirmations and device read-backs are listed separately.' if manual else 'Check pump paths, syringe diameters and the total delivery from all included blocks.')
             complete = [
-                bool(targets) and (not manual or prep.mapping_confirmed and bool(owner.controller and owner.controller.is_connected)
+                bool(targets) and (not manual or bool(owner.controller and owner.controller.is_connected)
                 and all(owner.panels[a].online and owner.panels[a].last_status not in (None, 'A') for a in targets)),
-                bool(targets) and all(prep.plans[a].diameter is not None and a not in owner._diameter_pending and (not manual or prep.tubing[a]!='pending') for a in targets),
-                bool(targets) and all(prep.tubing[a] in ('done', 'skipped') for a in targets),
+                bool(targets) and all(prep.plans[a].diameter is not None and a not in owner._diameter_pending for a in targets),
+                False,  # The legacy tubing-page index remains hidden.
                 bool(timeline and timeline.model.included_clips() and not timeline.pending()) if not manual else bool(targets) and all(not owner.panels[a].input_errors() for a in targets),
                 bool(timeline and timeline.checked and timeline.plan_ready() and not timeline.pending()) if not manual else bool(targets) and all(not owner.manual_start_blocker(a) for a in targets),
             ]
@@ -367,9 +369,6 @@ class Workflow(QWidget):
             count = (f'Plan entered: {entered}/{len(used)} | Device read-back: {verified}/{len(used)}' if manual else f'Timeline diameters entered: {entered}/{len(used)}') if used else 'No pumps selected for this experiment.'
             self.progress.setText(f'Editing P{owner.panels[owner.selected_address].index} · Start and stop each pump on its card.' if manual and self.step == 3 else count)
             self.syringe_count.setText(count)
-            self.mapping_check.blockSignals(True)
-            self.mapping_check.setChecked(prep.mapping_confirmed)
-            self.mapping_check.blockSignals(False)
             for address in owner.addresses:
                 plan = prep.plans[address]
                 panel = owner.panels[address]
@@ -403,14 +402,6 @@ class Workflow(QWidget):
                     status.setText(f'Plan entered: {plan.diameter:g} mm · device confirmation pending' if manual else f'Timeline diameter: {plan.diameter:g} mm')
                 self.diameter_buttons[address].setVisible(manual)
                 self.diameter_buttons[address].setEnabled(plan.used and owner.diameter_input_valid(address) and owner.can_write_panel(panel))
-                label, choice = self.tubing_choices[address]
-                label.setText(self.identity(address))
-                label.setVisible(plan.used)
-                choice.setVisible(plan.used)
-                blocker = QSignalBlocker(choice)
-                choice.setCurrentIndex(choice.findData(prep.tubing[address]))
-                del blocker
-                choice.setEnabled(not panel.running and not panel.busy)
             self.empty_syringes.setVisible(not used)
             self.copy_button.setEnabled(any(owner.panels[a].confirmed_diameter is not None for a in used))
             target = getattr(owner,'selected_address',None)

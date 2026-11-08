@@ -63,10 +63,6 @@ class PreparationState:
             return 'Select this pump for this experiment.'
         if self.plans[address].diameter is None:
             return 'Enter the syringe inside diameter.'
-        if not self.mapping_confirmed:
-            return 'Confirm the pump-to-inlet mapping.'
-        if self.tubing[address] not in ('done', 'skipped'):
-            return 'Confirm tubing preparation or explicitly skip it.'
         return ''
 
 

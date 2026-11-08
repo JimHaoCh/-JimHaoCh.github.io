@@ -79,15 +79,10 @@ class WorkflowController:
                     return f'P{index}: alarm reported; inspect and stop the pump.', 0
                 if panel.stop_pending:
                     return f'P{index}: running or awaiting STOP; use the stop controls.', 3
-            if not self.preparation.mapping_confirmed:
-                return 'Next: confirm the pump-to-inlet mapping.', 0
         for address in used:
             if self.preparation.plans[address].diameter is None or address in self._diameter_pending:
                 return f'P{self.addresses.index(address) + 1}: enter the syringe inside diameter.', 1
         if manual:
-            for address in used:
-                if self.preparation.tubing[address] == 'pending' and self.workflow.step!=3:
-                    return f'P{self.addresses.index(address) + 1}: confirm tubing preparation.', 1
             if self.workflow.step==3:
                 return 'Use the pump cards to start, resume or stop. Write changed settings before starting.',3
         timeline = self.timeline_editor
@@ -127,18 +122,11 @@ class WorkflowController:
             elif any(self.panels[a].last_status == 'A' for a in used):
                 target = self.emergency_button
             else:
-                target = self.workflow.mapping_check
+                target = self.workflow.mapping_inputs[used[0]][0]
         elif step == 1:
             address = next((a for a in used if self.preparation.plans[a].diameter is None or a in self._diameter_pending), None)
             if address is not None:
                 target = self.workflow.diameter_inputs[address]
-            elif self.manual_mode():
-                address=next((a for a in used if self.preparation.tubing[a]=='pending'),None)
-                if address is not None:target=self.workflow.tubing_choices[address][1]
-        elif step == 2:
-            address = next((a for a in used if self.preparation.tubing[a] not in ('done', 'skipped')), None)
-            if address is not None:
-                target = self.workflow.tubing_choices[address][1]
         elif step == 3 and self.mode_tabs.currentIndex() == 1 and self.timeline_editor:
             timeline = self.timeline_editor
             target = timeline.apply_button if timeline.dirty else timeline.duration_apply if timeline.duration_dirty else timeline.add_button
@@ -272,11 +260,6 @@ class WorkflowController:
             proof=self.station_proofs.get(address)
             if not proof or proof.formal!=self.panels[address].current_settings():return 'Write and read back the formal delivery settings first.'
         return self.panels[address].configuration_blocker() or ('' if self.panels[address].settings_applied else 'Apply settings first')
-
-    def confirm_mapping(self, checked):
-        if not self.workflow.updating:
-            self.preparation.mapping_confirmed = checked
-            self.refresh_group_controls()
 
     def change_tubing(self, address, choice):
         if self.workflow.updating or not self.manual_mode():
@@ -447,7 +430,7 @@ class WorkflowController:
             return False
         address, _ = snapshot
         return bool(self.preparation.plans[address].used and self.can_write_panel(self.panels[address])
-                    and address not in self._diameter_pending and self.preparation.mapping_confirmed)
+                    and address not in self._diameter_pending)
 
     def can_start_preparation(self, snapshot=None):
         snapshot = snapshot if snapshot is not None else self.preparation_snapshot()

@@ -179,9 +179,10 @@ class WorkflowUITests(unittest.TestCase):
         self.win.update_preparation(0, diameter=None)
         self.assertEqual(self.win.workflow_hint()[1], 1)
         self.win.update_preparation(0, diameter=4.699)
-        self.assertEqual(self.win.workflow_hint()[1], 1)
-        self.win.change_tubing(0, 'done')
         self.assertEqual(self.win.workflow_hint()[1], 3)
+        self.assertEqual(self.win.preparation.tubing[0], 'pending')
+        self.win.follow_workflow_hint()
+        self.assertEqual(self.win.workflow.step, 3)
         self.win.panels[0].set_online(False)
         self.assertEqual(self.win.workflow_hint()[1], 0)
         self.win.follow_workflow_hint()
@@ -238,17 +239,16 @@ class WorkflowUITests(unittest.TestCase):
             self.assertFalse(self.win.timeline_editor.running)
             self.assertFalse(any(call.args[1].startswith('RUN') for call in sent.call_args_list))
 
-    def test_user_confirmation_is_required_after_write_and_never_inferred(self):
+    def test_manual_start_after_write_needs_no_mapping_or_tubing_checkbox(self):
         self.ready((0,))
         self.win.preparation.mapping_confirmed = False
         self.win.preparation.confirm_tubing(0, 'pending')
         self.win.write_review()
         self.idle()
         self.assertTrue(self.win.panels[0].settings_applied)
-        self.assertFalse(self.win.workflow.review_start.isEnabled())
-        self.win.preparation.mapping_confirmed = True
-        self.win.change_tubing(0, 'skipped')
         self.assertTrue(self.win.workflow.review_start.isEnabled())
+        self.assertFalse(self.win.preparation.mapping_confirmed)
+        self.assertEqual(self.win.preparation.tubing[0], 'pending')
         self.win.start_review()
         self.idle()
         self.assertTrue(self.win.panels[0].running)
@@ -256,7 +256,7 @@ class WorkflowUITests(unittest.TestCase):
         self.idle()
         self.assertFalse(self.win.panels[0].running)
 
-    def test_unified_priming_never_auto_starts_formal_and_requires_tubing_confirmation(self):
+    def test_unified_priming_never_auto_starts_formal(self):
         self.ready((0,))
         view = self.win.workflow
         self.win.change_tubing(0, 'needed')

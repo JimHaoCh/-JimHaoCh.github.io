@@ -181,11 +181,11 @@ class Debug151Tests(unittest.TestCase):
         self.assertEqual(p.status_label.source_text,'● Stopped · progress retained')
         self.assertEqual(p.editor_run_button.source_text,'Resume delivery')
 
-    def test_post_priming_tubing_confirmation_is_available_without_a_second_diameter_input(self):
+    def test_post_priming_formal_start_needs_no_tubing_confirmation_or_second_diameter_input(self):
         self.ready();w=self.win;w.show_workflow_step(3);w.controller.clock=Clock();self.prime()
         w.change_tubing(0,'needed');self.write(0);w.start_station_priming(0);self.idle();w.stop_single(0);self.idle()
-        p=w.panels[0];self.assertTrue(p.setup_summary.confirm_ready.isVisible())
-        p.setup_summary.confirm_ready.click();self.assertEqual(w.preparation.tubing[0],'done')
+        p=w.panels[0];self.assertFalse(hasattr(p.setup_summary,'confirm_ready'))
+        self.assertFalse(w.manual_start_blocker(0))
         self.assertEqual(w.workflow.step,3);self.assertFalse(hasattr(p,'inline_setup'))
 
     def test_running_p1_does_not_make_missing_p2_diameter_bounce_between_steps(self):

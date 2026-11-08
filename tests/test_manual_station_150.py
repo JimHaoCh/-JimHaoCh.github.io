@@ -249,19 +249,20 @@ class ManualStationTests(unittest.TestCase):
         self.assertEqual(w.panels[0].last_status,'S')
         self.assertAlmostEqual(w.controller.pumps[0].infused_ml,.002)
 
-    def test_prime_only_keeps_tubing_confirmation_pending_and_formal_requires_user(self):
+    def test_prime_only_keeps_formal_start_explicit_without_tubing_confirmation(self):
         self.ready();w=self.win;self.prime();w.change_tubing(0,'needed');self.write(0)
         self.assertTrue(w.panels[0].priming_control.start.isEnabled())
-        self.assertTrue(w.manual_start_blocker(0))
+        self.assertFalse(w.manual_start_blocker(0))
         w.start_preparation();self.idle();w.stop_single(0);self.idle()
         self.assertEqual(w.preparation.tubing[0],'needed')
-        w.change_tubing(0,'done');self.assertFalse(w.manual_start_blocker(0))
+        self.assertFalse(w.panels[0].running)
+        self.assertFalse(w.manual_start_blocker(0))
 
-    def test_follow_priming_requires_ready_tubing_and_is_tracked_into_formal(self):
+    def test_follow_priming_is_explicit_and_tracked_into_formal(self):
         self.ready();w=self.win;clock=Clock();w.controller.clock=clock
         control=self.prime(follow=True);self.write(0)
-        w.change_tubing(0,'needed');self.assertFalse(control.start.isEnabled())
-        w.change_tubing(0,'done');control.start.click();self.idle()
+        w.change_tubing(0,'needed');self.assertTrue(control.start.isEnabled())
+        control.start.click();self.idle()
         self.assertEqual(w.panels[0].station_context,'priming_chain')
         clock.advance(2);w.refresh_status();self.idle()
         self.assertEqual(w.panels[0].station_phase,1)

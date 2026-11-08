@@ -97,6 +97,19 @@ def run_smoke_test(report_path: Path) -> int:
     if timeline.model.diameters != [None] * 4 or window.preparation.used_addresses():
         raise RuntimeError('A new experiment must start with blank syringe plans')
     window.load_example_workflow()
+    window.show_workflow_step(1)
+    flow_diameter = window.workflow.diameter_inputs[0]
+    example_diameter = timeline.model.diameters[0]
+    window.workflow.next_button.setFocus()
+    window.update_preparation(0, diameter=None)
+    QTest.mouseClick(flow_diameter, Qt.MouseButton.LeftButton)
+    if flow_diameter.text() or flow_diameter.lineEdit().placeholderText():
+        raise RuntimeError('Clicking an empty timeline diameter must clear the visual hint')
+    QTest.keyClicks(flow_diameter, str(example_diameter))
+    QTest.keyClick(flow_diameter, Qt.Key.Key_Return)
+    if timeline.model.diameters[0] != example_diameter:
+        raise RuntimeError('Timeline diameter must accept typing immediately after a mouse click')
+    window.show_workflow_step(3)
     if not window.grab().save(str(report_path.parent / 'timeline-preview.png')):
         raise RuntimeError('Unable to render timeline preview screenshot')
     for language in ('zh_TW','en'):
@@ -151,19 +164,21 @@ def run_smoke_test(report_path: Path) -> int:
         raise RuntimeError("Simulated STOP ALL did not confirm every pump")
     window.mode_tabs.setCurrentIndex(0)
     window.show_workflow_step(0)
-    window.workflow.mapping_check.setChecked(True)
-    for address in window.preparation.used_addresses():
-        window.change_tubing(address, 'skipped')
+    if hasattr(window.workflow, 'mapping_check') or hasattr(window.workflow, 'tubing_box'):
+        raise RuntimeError('Manual preparation must omit mapping and tubing confirmation controls')
     window.select_pump(0)
     panel = window.panels[0]
     window.show_workflow_step(1)
     diameter = window.workflow.diameter_inputs[0]
-    diameter.setFocus();diameter.selectAll()
+    window.workflow.next_button.setFocus()
+    window.update_preparation(0, diameter=None)
+    QTest.mouseClick(diameter, Qt.MouseButton.LeftButton)
+    if diameter.text() or diameter.lineEdit().placeholderText():
+        raise RuntimeError('Clicking an empty manual diameter must clear the visual hint')
     QTest.keyClicks(diameter,'4.699')
     if diameter.text()!='4.699':raise RuntimeError('Typed diameter was overwritten')
     QTest.mouseClick(window.workflow.diameter_buttons[0],Qt.MouseButton.LeftButton)
     wait_until(lambda: window.pending_tasks == 0 and panel.confirmed_diameter == 4.699, 'typed step-2 diameter verification')
-    window.change_tubing(0,'skipped')
     window.show_workflow_step(3)
     if hasattr(panel,'inline_setup') or not panel.diameter_input.isReadOnly():
         raise RuntimeError('The manual console must have one read-only syringe summary')
@@ -179,7 +194,7 @@ def run_smoke_test(report_path: Path) -> int:
     wait_until(lambda: window.pending_tasks == 0 and panel.running, 'card resume')
     panel.stop_button.click()
     wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'P', 'card stop')
-    window.change_tubing(0, 'needed')
+    panel.priming_control.toggle.setChecked(True)
     panel.priming_control.mode.setCurrentIndex(1)
     window.workflow.prep_rate.setFocus();window.workflow.prep_rate.selectAll()
     QTest.keyClicks(window.workflow.prep_rate,'10')
@@ -206,10 +221,8 @@ def run_smoke_test(report_path: Path) -> int:
         raise RuntimeError('Age refresh overwrote the priming-stage display')
     window.workflow.prep_stop.click()
     wait_until(lambda: window.pending_tasks == 0 and not panel.running, 'priming stop')
-    if not window.manual_start_blocker(0):
-        raise RuntimeError('Formal delivery requires user confirmation of tubing after priming')
-    panel.setup_summary.confirm_ready.click()
-    if window.manual_start_blocker(0):raise RuntimeError('Same-page tubing completion failed')
+    if window.manual_start_blocker(0):
+        raise RuntimeError('Formal delivery must not require a tubing confirmation after priming')
     window.set_diameter(0, 10)
     wait_until(lambda: window.pending_tasks == 0, 'same-diameter rewrite')
     if window.workflow.prep_start.isEnabled():
@@ -249,6 +262,9 @@ def run_smoke_test(report_path: Path) -> int:
         "keyboard_priming": True,
         "single_diameter_entry": True,
         "stage_label_retained": True,
+        "mouse_diameter_manual": True,
+        "mouse_diameter_timeline": True,
+        "no_preparation_confirmation_gates": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")
