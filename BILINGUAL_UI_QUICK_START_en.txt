@@ -1,4 +1,6 @@
-NE-501 v1.5.3 quick start
+NE-501 V2.0.0 quick start
+
+Active timer/trigger waits keep configuration locked and STOP available. A lost RUN reply is an uncertain-motion state: the app does not retry RUN. Stop and confirm the device response, then write and verify again. Alarms invalidate prior device proof and leave a nonmodal notice. Unit conversion uses the current valid draft; invalid drafts retain their text and unit.
 
 Manual Control: Connect & map > Syringes > Manual console.
 Timeline Editor: Pumps & paths > Syringes > Timeline editor > Check & preview.
@@ -15,6 +17,6 @@ The demo controller models elapsed-time finite delivery, pause/resume and explic
 
 Flow preview sends no pump start commands. Initial preparation belongs in timeline blocks, and all included blocks contribute to totals. Drag, trim, copy, split, snap, undo/redo, unit conversion and JSON files remain available. Device read-backs are session data.
 
-See BILINGUAL_MANUAL_UI_v1.5.3.md and UI_REVIEW_v1.5.3.md. Windows x64 and Windows 11 ARM64 share the installer. Automated device tests use simulated I/O; actual delivery, tubing behavior, stop latency and synchronization require hardware measurements.
+See BILINGUAL_MANUAL_UI_v2.0.0.md and UI_REVIEW_v2.0.0.md. Windows x64 and Windows 11 ARM64 share the installer. Automated device tests use simulated I/O; actual delivery, tubing behavior, stop latency and synchronization require hardware measurements.
 
 Stop queries that time out still lead to a STOP attempt. Unconfirmed stops survive repeated communication failures, rescans and disconnects. Log creation and write failures preserve startup and device-state updates. Unconfirmed stops also lock preparation fields and project replacement. Priming and pause labels survive timed refreshes. Completed group writes retain individual confirmations when another pump is stopped.

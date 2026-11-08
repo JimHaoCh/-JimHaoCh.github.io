@@ -59,6 +59,8 @@ def write_manual_program(controller, address, formal, priming=None):
         results.append((address, command, response))
         if not response.ok:
             raise ValueError(f'{command}: {response.data or response.error_label}')
+        if response.status != 'S':
+            raise ValueError('Pump state changed during write; settings were not verified.')
         return response
 
     try:
@@ -69,7 +71,7 @@ def write_manual_program(controller, address, formal, priming=None):
         formal_text='0' if formal.continuous else format_pump_number(base.volume)
         send(f'VOL {formal_text}')
         value,unit=parse_number_and_unit(send('VOL').data,{'UL','ML'})
-        if unit!=volume_unit or value is None or not math.isclose(value,float(formal_text),abs_tol=1e-9):
+        if unit!=volume_unit or value is None or not math.isclose(value,float(formal_text),rel_tol=0,abs_tol=1e-9):
             raise ValueError('Formal volume read-back does not match.')
         send('PHN 2');send('FUN STP')
         if send('FUN').data.strip()!='STP':raise ValueError('Formal end-phase read-back does not match.')
@@ -97,9 +99,9 @@ def write_manual_program(controller, address, formal, priming=None):
         rv, ru = parse_number_and_unit(rate.data, {'UM','MM','UH','MH'})
         vv, vu = parse_number_and_unit(volume.data, {'UL','ML'})
         if (function.data.strip() != 'RAT' or ru != actual_unit or rv is None
-                or not math.isclose(rv, actual_rate, abs_tol=1e-9)
+                or not math.isclose(rv, actual_rate, rel_tol=0, abs_tol=1e-9)
                 or vu != volume_unit or vv is None
-                or not math.isclose(vv, float(volume_text), abs_tol=1e-9)
+                or not math.isclose(vv, float(volume_text), rel_tol=0, abs_tol=1e-9)
                 or direction.data.strip() != priming.direction):
             raise ValueError('Priming read-back does not match the requested program.')
         send('PHN 4')

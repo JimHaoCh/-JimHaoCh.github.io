@@ -1,8 +1,8 @@
-# NE-501 Multi Pump Controller — UI Preview v1.5.3
+# NE-501 Multi Pump Controller — UI Preview v2.0.0
 
 Four-pump manual control and a visual timeline editor with global Traditional Chinese / English switching.
 
-v1.5.3 將新工作階段與新流程的四支針筒統一預設為 10 mm，預設值不代表設備已確認。範例只載入所選幫浦的區塊，保留自訂內徑、流體及入口，並回步驟 2 檢視。新檔、開檔、範例與兩種模式共用一致的準備順序；刪除空值、上下鍵同步、格式邊界、未確認停止、未完成內徑存檔及紀錄建立失敗均加入修正與回歸。
+V2.0.0 以 v1.5.3 為基準，依公開幫浦控制專案與原廠通訊文件補強等待狀態、啟動回覆遺失、停止確認、警報復原、完整回讀與單位切換。保留三階段手動操作、10 mm 初值、範例與內徑連動，以及既有時間軸編輯能力。完整缺陷與測試對照見 [V2.0.0 審查紀錄](UI_REVIEW_v2.0.0.md)。
 
 **手動控制會操作已連線設備；時間軸提供流程預覽，播放不傳送幫浦啟動指令。** 0.1 秒為編輯刻度，實機四幫浦同步誤差尚未量測。本專案與原廠無隸屬或背書關係，使用前請閱讀 [DISCLAIMER.txt](DISCLAIMER.txt)。
 
@@ -11,9 +11,9 @@ v1.5.3 將新工作階段與新流程的四支針筒統一預設為 10 mm，預�
 - [版本下載](https://github.com/JimHaoCh/-JimHaoCh.github.io/releases)
 - [繁體中文快速說明](TIMELINE_PREVIEW_README_zh.txt)
 - [English quick start](BILINGUAL_UI_QUICK_START_en.txt)
-- [雙語與手動介面設計、驗證範圍](BILINGUAL_MANUAL_UI_v1.5.3.md)
+- [雙語與手動介面設計、驗證範圍](BILINGUAL_MANUAL_UI_v2.0.0.md)
 - [時間軌審查紀錄](UI_REVIEW_2026-11-06.md)
-- [v1.5.3 原始碼審查與修正](UI_REVIEW_v1.5.3.md)
+- [v2.0.0 原始碼審查與修正](UI_REVIEW_v2.0.0.md)
 - [參考來源](REFERENCES.md)／[引用資料](CITATION.cff)
 
 Windows x64／Windows 11 ARM64 共用安裝程式，使用者無須另裝 Python。預覽版使用與 v1.0.1 分開的安裝位置與設定；此版更新既有 UI Preview。

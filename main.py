@@ -243,6 +243,43 @@ def run_smoke_test(report_path: Path) -> int:
     wait_until(lambda: window.pending_tasks == 0, 'same-diameter rewrite')
     if window.workflow.prep_start.isEnabled():
         raise RuntimeError('A diameter rewrite must invalidate the old priming verification')
+    # Installed binaries must retain active-wait locking and ambiguous-RUN
+    # recovery, not just pass a normal virtual start/stop cycle.
+    window.poll_timer.stop()
+    for status in ('T', 'U'):
+        window.controller.pumps[0].status = status
+        panel.update_from_status(status)
+        window.refresh_group_controls()
+        if not panel.running or window.can_use_timeline() or window.can_write_panel(panel) or not panel.stop_button.isEnabled():
+            raise RuntimeError('Active wait must lock configuration and retain STOP')
+        panel.stop_button.click()
+        wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'P' and not panel.running,
+                   'stop from active wait')
+    panel.apply_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.settings_applied, 'rearm before lost-reply check')
+    from unittest.mock import patch
+    from ne501.controller import PumpTimeoutError
+    send = window.controller.send_command
+    attempted_runs = []
+    def lose_start_reply(address, command):
+        response = send(address, command)
+        if command.startswith('RUN'):
+            attempted_runs.append((address, command))
+            raise PumpTimeoutError('Simulated lost RUN reply')
+        return response
+    with patch.object(window.controller, 'send_command', side_effect=lose_start_reply):
+        panel.run_button.click()
+        wait_until(lambda: window.pending_tasks == 0, 'lost RUN reply')
+    if (len(attempted_runs) != 1 or not panel.running or panel.last_status is not None
+            or panel.run_button.isEnabled() or not panel.stop_button.isEnabled() or window.can_use_timeline()):
+        raise RuntimeError('A lost RUN reply must retain an uncertain-motion state without retrying')
+    app.processEvents()
+    window.grab().save(str(report_path.parent / 'start-unconfirmed.png'))
+    panel.stop_button.click()
+    wait_until(lambda: window.pending_tasks == 0 and panel.last_status == 'P' and not panel.running,
+               'confirmed stop after lost RUN reply')
+    if not window.manual_start_blocker(0) or not panel.online:
+        raise RuntimeError('Lost-reply recovery must invalidate old device proof')
     for language in ('zh_TW', 'en'):
         manager.set_language(language)
         for step in (0,1,3):
@@ -286,6 +323,10 @@ def run_smoke_test(report_path: Path) -> int:
         "example_reviews_step_two": True,
         "cleared_diameter_persists": True,
         "arrow_diameter_committed": True,
+        "active_wait_locked": True,
+        "active_wait_stop_confirmed": True,
+        "lost_run_reply_recovered": True,
+        "run_not_automatically_retried": True,
         "font_family": font_family,
         "hardware_connected": False,
     }, indent=2), encoding="utf-8")

@@ -41,6 +41,7 @@ try {
     $smoke = Get-Content -Raw $report | ConvertFrom-Json
     if (-not $smoke.ok -or $smoke.python_platform -ne $expectedPlatform) { throw 'Wrong installed application architecture.' }
     if ($smoke.version -ne $expectedVersion -or -not $smoke.guided_manual_workflow -or -not $smoke.shared_preparation -or -not $smoke.bounded_priming) { throw 'Installed version or guided manual workflow check failed.' }
+    if (-not $smoke.active_wait_locked -or -not $smoke.active_wait_stop_confirmed -or -not $smoke.lost_run_reply_recovered -or -not $smoke.run_not_automatically_retried) { throw 'Installed control-state recovery checks failed.' }
     $config = Join-Path $userData 'NE501_Timeline_UI_Preview\config.json'
     if (-not (Test-Path $config)) { throw 'User config was not created.' }
     $uninstaller = Join-Path $target 'unins000.exe'

@@ -34,9 +34,10 @@ class Button(Tooltip, W.QPushButton):
         self.retranslate()
     def setText(self, text):
         self.source_text = str(text)
-        super().setText(tr(text))
+        super().setText(tr(text).replace('&', '&&'))
     def retranslate(self):
-        super().setText(tr(self.source_text))
+        # Captions use '&' as prose, not as an implicit keyboard shortcut.
+        super().setText(tr(self.source_text).replace('&', '&&'))
         self._translate_tip()
 
 class CheckBox(Tooltip, W.QCheckBox):

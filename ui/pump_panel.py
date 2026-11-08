@@ -496,12 +496,15 @@ class PumpPanel(GroupBox):
         self._refresh_enabled_state()
 
     def set_online(self, online, version=''):
+        was_online = self.online
         self.online = online
         self.setProperty('online', online)
         self.status_label.setObjectName('onlineStatus' if online else 'offlineStatus')
         if online and version:
             self.version_label.setText(version)
             self.version_label.setToolTip(version)
+        elif online and not was_online:
+            self.version_label.setText('Device responding')
         if not online:
             self.last_status = None
             self.version_label.setText('No response')
@@ -579,12 +582,12 @@ class PumpPanel(GroupBox):
             self.readback_label.setText(f'Read-back: {value:g} {RATE_LABELS.get(unit, unit)}')
 
     def update_from_status(self, status):
-        from ne501.protocol import STATUS_LABELS
+        from ne501.protocol import STATUS_LABELS, ACTIVE_PROGRAM_STATUSES
         if status in STATUS_LABELS:
             self.last_status = status
             self.last_checked = datetime.now().strftime('%H:%M:%S')
             self.checked_at = time.monotonic()
-            self.running = status in {'I', 'W', 'X'}
+            self.running = status in ACTIVE_PROGRAM_STATUSES
             if status == 'S' or status == 'P' and not self.stop_requires_reset:
                 self.stop_pending = False
                 self.stop_requires_reset = False
@@ -601,6 +604,14 @@ class PumpPanel(GroupBox):
     def set_last_response(self, text):
         self.last_response_source = str(text)
         self.last_response_label.setText('Last response: ' + str(text))
+
+    def mark_motion_uncertain(self):
+        """RUN may have reached the device even when its reply was lost."""
+        self.running = True
+        self.set_online(False)
+        self.setProperty('running', True)
+        self._repolish_status_widgets()
+        self._refresh_enabled_state()
 
     def configuration_blocker(self):
         if not self.online:
@@ -629,11 +640,17 @@ class PumpPanel(GroupBox):
         return '' if self.settings_applied else 'Apply settings first'
 
     def readiness(self):
+        if self.running and self.last_status is None:
+            return 'Motion unconfirmed. Send STOP and confirm the device response.'
         if self.running and self.last_status is not None:
             return 'Reported: ' + self._motion()
         return self.start_blocker() or 'Ready'
 
     def next_instruction(self):
+        if self.running and self.last_status is None:
+            return 'Motion unconfirmed. Send STOP and confirm the device response.'
+        if self.stop_pending:
+            return 'Stop pending — awaiting response'
         if not self.connection_available and not self.online:
             return 'Next: select a COM port, then Connect and detect.'
         if not self.online:
@@ -647,6 +664,8 @@ class PumpPanel(GroupBox):
         if self.last_status == 'A':
             return 'Alarm — check pump, stop and refresh status'
         if self.running:
+            if self.last_status in ('T', 'U'):
+                return 'Program active: it may resume automatically. Use Stop this pump to stop it.'
             return 'Running. Use Stop this pump to finish.'
         if self.confirmed_diameter is None:
             if self.station_managed and self.planned_diameter is not None:
@@ -679,7 +698,7 @@ class PumpPanel(GroupBox):
         self.validation_label.setVisible(bool(errors))
 
     def _refresh_summary(self):
-        status_style = 'warningLabel' if self.stop_pending or self.online and self.last_status in (None, 'A') else 'onlineStatus' if self.online else 'offlineStatus'
+        status_style = 'warningLabel' if self.stop_pending or self.running and self.last_status is None or self.online and self.last_status in (None, 'A') else 'onlineStatus' if self.online else 'offlineStatus'
         if self.status_label.objectName() != status_style:
             self.status_label.setObjectName(status_style)
             self.status_label.style().unpolish(self.status_label)
@@ -688,8 +707,12 @@ class PumpPanel(GroupBox):
             self.status_label.setText('● STOP NOT CONFIRMED' if self.last_status is None else 'Stop pending — awaiting response')
         elif self.last_status == 'A':
             self.status_label.setText('● Alarm')
-        elif self.online and self.last_status is None:
+        elif (self.online or self.running) and self.last_status is None:
             self.status_label.setText('● STATUS UNCONFIRMED')
+        elif self.online and self.last_status == 'T':
+            self.status_label.setText('● Timed wait · program active')
+        elif self.online and self.last_status == 'U':
+            self.status_label.setText('● Trigger wait · program active')
         elif self.running and self.online:
             self.status_label.setText('● Running')
         elif self.online and self.last_status == 'P':
@@ -708,7 +731,7 @@ class PumpPanel(GroupBox):
             mode = f'Prime: {settings.prime_volume:g} {volume_unit} → {mode}'
         self.mode_label.setText(mode)
         prime = getattr(self, 'station_priming_settings', None)
-        if (self.station_managed and prime is not None and self.last_status in ('I','W','X','P')
+        if (self.station_managed and prime is not None and self.last_status in ('I','W','X','P','T','U')
                 and self.station_context in ('priming','priming_chain') and self.station_phase != 1):
             self.target_label.setText(f'Priming: {prime.rate:.5g} {RATE_LABELS[prime.rate_unit]}')
             self.mode_label.setText('Priming then formal delivery' if prime.follow_delivery else 'Priming only')

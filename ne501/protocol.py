@@ -19,6 +19,10 @@ STATUS_LABELS = {
     "A": "Alarm",
 }
 
+# A live program can restart its motor after a timer or an external trigger.
+# P is different: STP has paused the program and retained its progress.
+ACTIVE_PROGRAM_STATUSES = frozenset({'I', 'W', 'X', 'T', 'U'})
+
 ALARM_LABELS = {
     "R": "Pump reset / power interrupted",
     "S": "Motor stalled",
@@ -28,6 +32,7 @@ ALARM_LABELS = {
 }
 
 ERROR_LABELS = {
+    "MALFORMED": "Malformed pump response",
     "NA": "Command not applicable",
     "OOR": "Value out of range",
     "COM": "Invalid command",
@@ -46,7 +51,8 @@ class PumpResponse:
 
     @property
     def ok(self) -> bool:
-        return self.error_code is None and self.alarm_code is None
+        return (self.status in STATUS_LABELS and self.status != 'A'
+                and self.error_code is None and self.alarm_code is None)
 
     @property
     def status_label(self) -> str:
@@ -77,9 +83,11 @@ def build_command(address: int, command: str) -> bytes:
     Normal commands use a two-digit pump address. System commands beginning
     with '*' override the network address and are sent without a prefix.
     """
-    command = command.strip().upper()
-    if address < 0 or address > 99:
+    if isinstance(address, bool) or not isinstance(address, int) or not 0 <= address <= 99:
         raise ValueError("Pump address must be between 0 and 99")
+    if not isinstance(command, str) or any(not 32 <= ord(char) <= 126 for char in command):
+        raise ValueError("Pump commands must contain one line of printable ASCII")
+    command = command.strip().upper()
     # The NE-500/501 manual defines an addressed packet with no command as a
     # status-only query. It is useful before STP so an already-stopped pump is
     # not sent a command that firmware may reject with ?NA.
@@ -108,6 +116,8 @@ def parse_response(raw: bytes, expected_address: Optional[int] = None) -> PumpRe
 
     address: Optional[int] = None
     remainder = text
+    if remainder.startswith('*'):
+        remainder = remainder[1:]
 
     if expected_address is not None:
         # Prefer the normal two-digit network address. Some firmware/tools may
@@ -145,10 +155,15 @@ def parse_response(raw: bytes, expected_address: Optional[int] = None) -> PumpRe
     error_code: Optional[str] = None
     alarm_code: Optional[str] = None
 
-    if status == "A" and data.startswith("?") and len(data) >= 2:
-        alarm_code = data[1]
+    if status == "A":
+        alarm_code = data[1] if data.startswith("?") and len(data) == 2 else "UNKNOWN"
     elif data.startswith("?"):
         error_code = data[1:].strip() or "UNKNOWN"
+
+    # Keep decoded fields for diagnostics, but only a complete Basic-mode frame
+    # with a known status may acknowledge a command. '*' is a system address.
+    if re.fullmatch(rb'\x02(?:[0-9]{1,2}|\*)[IWSPTUXA][\x20-\x7e]*\x03', raw) is None:
+        error_code = "MALFORMED"
 
     return PumpResponse(
         address=address,

@@ -36,6 +36,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         self._diameter_pending = set()
         self._prep_input_pending = False
         self._notice_windows = set()
+        self._alarm_notices = set()
         self._prep_verified = {}
         self._syncing_preparation = False
         self._refreshing_workflow = False
@@ -361,7 +362,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
                 try:
                     response=self.controller.send_command(address,'')
                     phase=None
-                    if response.ok and response.status in ('I','W','P') and self.panels[address].station_context:
+                    if response.ok and response.status in ('I','W','P','T','U','X') and self.panels[address].station_context:
                         phase=self.controller.send_command(address,'PHN')
                     outcomes.append((address,response,phase,None))
                 except Exception as exc:outcomes.append((address,None,None,str(exc)))
@@ -423,6 +424,7 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             self.preparation.reset_session()
             self._prep_verified.clear()
             self.station_proofs.clear()
+            self._alarm_notices.clear()
             self.settings.setValue("last_port", port)
             self.connection_label.setText('● Demo mode' if isinstance(controller, MockNE501Controller) else f"● Connected {port}")
             self.connection_label.setObjectName("onlineStatus")
@@ -567,15 +569,16 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
         self.hold_station([address])
 
     def run_single_command(self, address: int, command: str, panel: PumpPanel) -> None:
-        if command.startswith('RUN') and not self.manual_mode():
+        parts=command.strip().upper().split()
+        if parts and parts[0]=='RUN':
+            if parts not in (['RUN'], ['RUN','1'], ['RUN','3']):return
+            self.start_station(address,fresh=parts==['RUN','1'],priming=parts==['RUN','3'])
             return
         def action():
             return self.controller.send_command(address, command)
 
         def success(response: PumpResponse) -> None:
-            self.log_response(address, command, response)
-            panel.update_from_status(response.status)
-            panel.set_last_response(self.describe_response(response))
+            self.process_results([(address, command, response)])
 
         self.run_task(action, success, panels=[panel])
 
@@ -655,7 +658,11 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
 
     def group_command(self,panels,command):
         if not self.require_connection():return
-        if command.startswith('RUN') and any(self.manual_start_blocker(p.address) for p in panels):return
+        parts=command.strip().upper().split()
+        if parts and parts[0]=='RUN':
+            if parts not in (['RUN'], ['RUN','1'], ['RUN','3']):return
+            self.start_station_group(panels,fresh=parts==['RUN','1'],priming=parts==['RUN','3'])
+            return
         if command=='STP':
             for panel in panels:
                 self._pump_generation[panel.address]=self._pump_generation.get(panel.address,0)+1
@@ -699,6 +706,13 @@ class MainWindow(ManualStationController, WorkflowController, QMainWindow):
             if panel is not None:
                 panel.update_from_status(response.status)
                 panel.set_last_response(self.describe_response(response))
+                if response.status == 'A':
+                    self.invalidate_program_confirmation(address)
+                    key = (address, response.alarm_code)
+                    if key not in self._alarm_notices:
+                        self._alarm_notices.add(key)
+                        self.show_nonmodal_warning('Pump alarm',
+                            f'Pump {panel.index}: {response.alarm_label or response.data}. Check the device, stop, then write and verify again.')
             self.log_response(address, command, response)
 
     def log_response(self, address: int, command: str, response: PumpResponse) -> None:

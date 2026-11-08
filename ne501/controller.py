@@ -8,7 +8,7 @@ import threading
 import time
 from typing import Iterable, Optional
 
-from .protocol import ETX, PumpResponse, build_command, first_float, parse_response
+from .protocol import ETX, PumpResponse, build_command, parse_response
 from .syringe import MAX_LINEAR_SPEED_MM_MIN, format_diameter
 from .pump_numbers import format_pump_number, convert_rate, normalize_rate
 
@@ -139,13 +139,13 @@ def choose_program_volume_unit(settings: "ProgramSettings") -> tuple[str, dict[s
 
 
 def parse_number_and_unit(text: str, allowed_units: set[str]) -> tuple[Optional[float], Optional[str]]:
-    match = re.search(r"([-+]?\d+(?:\.\d+)?)\s*([A-Z]{2})?", text.upper())
+    match = re.fullmatch(r"\s*([-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))\s*([A-Z]{2})?\s*", text.upper())
     if not match:
         return None, None
     value = float(match.group(1))
     unit = match.group(2)
-    if unit not in allowed_units:
-        unit = None
+    if unit is not None and unit not in allowed_units:
+        return None, None
     return value, unit
 
 
@@ -171,6 +171,8 @@ class DiameterConfirmation:
         return (
             self.set_response.ok
             and self.query_response.ok
+            and self.set_response.status == 'S'
+            and self.query_response.status == 'S'
             and self.confirmed_mm is not None
             and math.isclose(float(format_diameter(self.requested_mm)), self.confirmed_mm,
                              rel_tol=0, abs_tol=1e-9)
@@ -285,6 +287,8 @@ class NE501Controller:
                 received.clear()
                 received.append(byte)
                 continue
+            if not received:
+                continue
             received.append(byte)
             if byte == ETX[0]:
                 return bytes(received)
@@ -319,7 +323,9 @@ class NE501Controller:
             packet = build_command(address, command)
             try:
                 self._serial.reset_input_buffer()
-                self._serial.write(packet)
+                written = self._serial.write(packet)
+                if written != len(packet):
+                    raise PumpConnectionError(f"Incomplete serial write: {written}/{len(packet)} bytes; command not retried")
                 self._serial.flush()
                 raw = self._read_packet()
             except (PumpTimeoutError, PumpConnectionError):
@@ -330,6 +336,8 @@ class NE501Controller:
                 self._last_command_at = time.monotonic()
             expected = None if command.strip().startswith("*") else address
             response = parse_response(raw, expected_address=expected)
+            if response.error_code == 'MALFORMED' or response.status is None:
+                raise PumpConnectionError(f"Malformed pump response: {response.raw_hex}")
             if expected is not None and response.address != expected:
                 actual = "unknown" if response.address is None else f"{response.address:02d}"
                 raise PumpConnectionError(
@@ -424,11 +432,13 @@ class NE501Controller:
                 continue
             if not self._stop_result_ok(command, response):
                 raise PumpConnectionError(describe_rejection(command, response))
+        if not stop_results or stop_results[-1][2].status != 'S':
+            raise PumpConnectionError("Cannot confirm program reset; settings were not written.")
         set_response = self.send_command(address, f"DIA {diameter_text}")
         query_response = self.send_command(address, "DIA")
         return DiameterConfirmation(
             requested_mm=diameter_mm,
-            confirmed_mm=first_float(query_response.data),
+            confirmed_mm=parse_number_and_unit(query_response.data, set())[0],
             set_response=set_response,
             query_response=query_response,
         )
@@ -456,6 +466,8 @@ class NE501Controller:
             response = self.send_command(address, command)
             results.append((address, command, response))
             if response.ok:
+                if response.status != 'S':
+                    return None, "Pump state changed during write; settings were not verified."
                 actual_ml_hr = convert_rate(float(text), unit, "MH")
                 return actual_ml_hr, None
             last_problem = describe_rejection(command, response)
@@ -517,6 +529,11 @@ class NE501Controller:
                 results, False, describe_rejection(command, response), None,
                 steady_rate_value, steady_rate_unit, program_volume_unit,
             )
+        if not results or results[-1][2].status != 'S':
+            return ProgramConfirmation(
+                results, False, "Cannot confirm program reset; settings were not written.", None,
+                steady_rate_value, steady_rate_unit, program_volume_unit,
+            )
 
         prime_rate_actual: Optional[float] = None
 
@@ -525,6 +542,8 @@ class NE501Controller:
             results.append((address, command, response))
             if not response.ok:
                 return describe_rejection(command, response)
+            if response.status != 'S':
+                return "Pump state changed during write; settings were not verified."
             return None
 
         if settings.prime_enabled:
@@ -600,12 +619,16 @@ class NE501Controller:
             if not settings.continuous:
                 verification_commands += ["PHN 2", "FUN"]
 
-        verify_results = self.send_many((address, command) for command in verification_commands)
-        results.extend(verify_results)
-        for _, command, response in verify_results:
-            if not response.ok:
+        verify_results = []
+        for command in verification_commands:
+            response = self.send_command(address, command)
+            entry = (address, command, response)
+            verify_results.append(entry)
+            results.append(entry)
+            if not response.ok or response.status != 'S':
                 return ProgramConfirmation(
-                    results, False, describe_rejection(command, response), prime_rate_actual,
+                    results, False, (describe_rejection(command, response) if not response.ok
+                                    else "Pump state changed during write; settings were not verified."), prime_rate_actual,
                     steady_rate_value, steady_rate_unit, program_volume_unit,
                 )
 
@@ -622,23 +645,23 @@ class NE501Controller:
             value, unit = parse_number_and_unit(response.data, VALID_RATE_UNITS)
             return (
                 value is not None and unit == expected_unit
-                and math.isclose(value, expected_value, rel_tol=1e-9, abs_tol=1e-9)
+                and math.isclose(value, expected_value, rel_tol=0, abs_tol=1e-9)
             )
 
         def volume_matches(response: PumpResponse, expected_value: float) -> bool:
             value, unit = parse_number_and_unit(response.data, VALID_VOLUME_UNITS)
             return (
                 value is not None and unit == program_volume_unit
-                and math.isclose(value, expected_value, rel_tol=1e-9, abs_tol=1e-9)
+                and math.isclose(value, expected_value, rel_tol=0, abs_tol=1e-9)
             )
 
         steady_phase = 2 if settings.prime_enabled else 1
         steady = by_phase.get(steady_phase, {})
         checks: list[tuple[str, bool]] = [
-            ("steady FUN", steady.get("FUN") is not None and "RAT" in steady["FUN"].data.upper()),
+            ("steady FUN", steady.get("FUN") is not None and steady["FUN"].data.strip().upper() == "RAT"),
             ("steady RAT", steady.get("RAT") is not None and rate_matches(steady["RAT"], steady_rate_value, steady_rate_unit)),
             ("steady VOL", steady.get("VOL") is not None and volume_matches(steady["VOL"], 0.0 if settings.continuous else steady_volume_value)),
-            ("steady DIR", steady.get("DIR") is not None and settings.direction in steady["DIR"].data.upper()),
+            ("steady DIR", steady.get("DIR") is not None and steady["DIR"].data.strip().upper() == settings.direction),
         ]
 
         if settings.prime_enabled:
@@ -650,18 +673,18 @@ class NE501Controller:
                 value, unit = parse_number_and_unit(prime_rate_response.data, VALID_RATE_UNITS)
                 if value is not None and unit in {"MH", "UH"}:
                     actual_ml_hr = convert_rate(value, unit, "MH")
-                    prime_rate_ok = math.isclose(actual_ml_hr, prime_rate_actual, rel_tol=1e-9, abs_tol=1e-9)
+                    prime_rate_ok = math.isclose(actual_ml_hr, prime_rate_actual, rel_tol=0, abs_tol=1e-9)
             checks += [
-                ("prime FUN", prime.get("FUN") is not None and "RAT" in prime["FUN"].data.upper()),
+                ("prime FUN", prime.get("FUN") is not None and prime["FUN"].data.strip().upper() == "RAT"),
                 ("prime RAT", prime_rate_ok),
                 ("prime VOL", prime.get("VOL") is not None and volume_matches(prime["VOL"], prime_volume_value)),
-                ("prime DIR", prime.get("DIR") is not None and settings.direction in prime["DIR"].data.upper()),
+                ("prime DIR", prime.get("DIR") is not None and prime["DIR"].data.strip().upper() == settings.direction),
             ]
 
         stop_phase = 3 if settings.prime_enabled else 2
         if not settings.continuous:
             stop = by_phase.get(stop_phase, {})
-            checks.append(("stop FUN", stop.get("FUN") is not None and "STP" in stop["FUN"].data.upper()))
+            checks.append(("stop FUN", stop.get("FUN") is not None and stop["FUN"].data.strip().upper() == "STP"))
 
         failed_checks = [name for name, passed in checks if not passed]
         verified = not failed_checks

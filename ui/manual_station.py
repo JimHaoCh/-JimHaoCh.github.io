@@ -239,6 +239,7 @@ class ManualStationController:
                     panel.confirm_diameter(program.diameter_mm)
                     panel.mark_settings_applied();panel.set_program_confirmation(result)
                     self.station_proofs[a]=ManualProof(settings,prime,program)
+                    self._alarm_notices={key for key in self._alarm_notices if key[0]!=a}
                     panel.station_priming_settings=prime
                     if prime:
                         self._prep_verified[a]=(a,prime)
@@ -274,36 +275,38 @@ class ManualStationController:
             outcomes=[]
             for p in panels:
                 a=p.address
+                results=[];attempted_run=None
                 try:
                     status=controller.send_command(a,'')
                     results=[(a,'STATUS',status)]
                     if not status.ok or status.status not in ('P','S'):
-                        outcomes.append((a,results,None,'Confirm the pump is stopped before starting.'));break
+                        outcomes.append((a,results,None,'Confirm the pump is stopped before starting.',None));break
                     phase=None
                     if status.status=='P':
                         response=controller.send_command(a,'PHN');results.append((a,'PHN',response))
                         if not response.ok or not response.data.strip().isdigit():
-                            outcomes.append((a,results,None,'Cannot confirm the paused phase.'));break
+                            outcomes.append((a,results,None,'Cannot confirm the paused phase.',None));break
                         phase=int(response.data)
                     resume=resume_intent[a]
                     if resume and (status.status!='P' or phase!=expected_phase):
-                        outcomes.append((a,results,None,'Paused progress changed; review the device state before continuing.'));break
+                        outcomes.append((a,results,None,'Paused progress changed; review the device state before continuing.',None));break
                     command='RUN' if resume else 'RUN 3' if priming else 'RUN 1'
                     if status.status=='P' and not resume:
                         response=controller.send_command(a,'STP');results.append((a,'STP',response))
                         if not response.ok or response.status!='S':
-                            outcomes.append((a,results,None,'Cannot confirm program reset.'));break
+                            outcomes.append((a,results,None,'Cannot confirm program reset.',None));break
+                    attempted_run=command
                     response=controller.send_command(a,command);results.append((a,command,response))
                     proof=self.station_proofs.get(a)
                     kind=('priming_chain' if proof and proof.priming and proof.priming.follow_delivery else 'priming') if priming else 'formal'
-                    outcomes.append((a,results,kind,None if response.ok else 'Pump rejected the start command.'))
+                    outcomes.append((a,results,kind,None if response.ok else 'Pump rejected the start command.',None))
                     if not response.ok:break
                 except CommandCancelled:break
-                except Exception as exc:outcomes.append((a,[],None,str(exc)));break
+                except Exception as exc:outcomes.append((a,results,None,str(exc),attempted_run));break
             return outcomes
         def success(outcomes):
             completed=set()
-            for a,results,kind,error in outcomes:
+            for a,results,kind,error,uncertain_run in outcomes:
                 if self._pump_generation.get(a,0)!=generations[a]:continue
                 completed.add(a)
                 panel=self.panels[a]
@@ -314,8 +317,16 @@ class ManualStationController:
                     if kind=='priming':self.preparation.confirm_tubing(a,'needed')
                 self.process_results(results)
                 if error:
-                    if not results:panel.set_online(False)
-                    self.show_nonmodal_warning('Operation Failed',error)
+                    if uncertain_run:
+                        self.invalidate_program_confirmation(a)
+                        panel.mark_motion_uncertain()
+                        self.record_command(a,uncertain_run,error=error)
+                        panel.set_last_response('Start response lost; motion is unconfirmed. Send STOP and confirm the device response.')
+                        self.append_log(f'Pump {panel.index}: {uncertain_run} response lost; motion unconfirmed. {error}')
+                        self.show_nonmodal_warning('Start not confirmed',panel.last_response_source)
+                    else:
+                        if not results:panel.set_online(False)
+                        self.show_nonmodal_warning('Operation Failed',error)
             if any(item[3] for item in outcomes):
                 for panel in panels:
                     if panel.address not in completed and self._pump_generation.get(panel.address,0)==generations[panel.address]:
@@ -350,7 +361,9 @@ class ManualStationController:
             return outcomes
         def success(outcomes):
             for a,results,status,error in outcomes:
-                panel=self.panels[a];self.process_results(results)
+                panel=self.panels[a]
+                if status:panel.set_online(True)
+                self.process_results(results)
                 if status:
                     for _,command,response in results:
                         if command=='PHN' and response.ok and response.data.strip().isdigit():panel.station_phase=int(response.data)

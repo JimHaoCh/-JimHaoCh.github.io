@@ -72,6 +72,8 @@ class WorkflowController:
             for address in used:
                 panel = self.panels[address]
                 index = self.addresses.index(address) + 1
+                if panel.stop_pending or panel.running and panel.last_status is None:
+                    return f'P{index}: motion unconfirmed; use the stop controls.', 3
                 if not panel.online:
                     return f'P{index}: no response; check the connection and rescan.', 0
                 if panel.last_status is None:

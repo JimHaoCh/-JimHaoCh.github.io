@@ -15,6 +15,16 @@ def preserve_quantity(spin, combo, factors, notice, loading=lambda: False):
         if old == new or old not in factors or new not in factors:
             previous[0] = new
             return
+        # Keyboard tracking is disabled. Read the visible draft before changing
+        # units; value() alone can still contain the previously committed value.
+        if not spin.hasAcceptableInput():
+            blocker = QSignalBlocker(combo)
+            index = combo.findData(old)
+            combo.setCurrentIndex(index if index >= 0 else combo.findText(old))
+            del blocker
+            notice('Finish entering a valid number before changing units.')
+            return
+        spin.interpretText()
         if spin.value() == 0 and spin.minimum() == 0:
             previous[0] = new
             return
